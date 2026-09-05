@@ -212,10 +212,11 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
 
         if (snap != NULL) {
             /* argv[1]: IOP snapshot, EE event and EE badge buffers, eight
-               hex digits each, comma-separated; argv[2]: SMAP's ipconfig
-               strings. raudp finds the PC itself. */
-            char args[27 + IPCONFIG_MAX_LEN];
-            int k;
+               hex digits each; then whether raudp may read from the
+               network in play, then the game's serial. argv[2]: SMAP's
+               ipconfig strings. raudp finds the PC itself. */
+            char args[45 + IPCONFIG_MAX_LEN];
+            int k, n;
 
             ra_snap_iop = (unsigned int)snap;
             ra_hex32(ra_snap_iop, snap_arg);
@@ -229,12 +230,25 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
             ra_hex32((unsigned int)RA_OverlayBadgeBuffer(), snap_arg);
             for (k = 0; k < 8; k++)
                 args[18 + k] = snap_arg[k];
-            args[26] = '\0';
+
+            /* Both roads to the PC take what the game needs when it runs
+               from a share: the raw one frees SMAP receive descriptors
+               the disc stream arrives in, the lwIP one queues on the
+               mailbox the SMB client waits on. A game from a share loads
+               for ever with either. Sending is unaffected and stays on. */
+            args[26] = ',';
+            args[27] = config->GameMode == ETH_MODE ? '0' : '1';
+
+            args[28] = ',';
+            for (n = 0; n < 15 && config->GameID[n] != '\0'; n++)
+                args[29 + n] = config->GameID[n];
+            args[29 + n] = '\0';
+            n += 30;
 
             for (k = 0; k < g_ipconfig_len && k < IPCONFIG_MAX_LEN; k++)
-                args[27 + k] = g_ipconfig[k];
+                args[n + k] = g_ipconfig[k];
 
-            ra_raudp_result = LoadOPLModule(OPL_MODULE_ID_RAUDP, 0, 27 + k, args);
+            ra_raudp_result = LoadOPLModule(OPL_MODULE_ID_RAUDP, 0, n + k, args);
         } else {
             ra_snap_iop = 0;
             ra_raudp_result = LoadOPLModule(OPL_MODULE_ID_RAUDP, 0, 0, NULL);
