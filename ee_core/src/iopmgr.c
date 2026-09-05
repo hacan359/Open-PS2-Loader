@@ -154,16 +154,21 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
        including games running from USB. ETH mode loads these modules
        in its own branch below; every other mode loads them here. */
 #ifndef __LOAD_DEBUG_MODULES
-    /* RA disc mode: no OPL cdvdman, hence no built-in DEV9; SMAP needs
-       it loaded first. */
-    if (config->GameMode == DISC_MODE) {
-        LoadOPLModule(OPL_MODULE_ID_DEV9, 0, 0, NULL);
-        LoadOPLModule(OPL_MODULE_ID_SMSUTILS, 0, 0, NULL);
-    }
+    /* An empty watch list means RetroAchievements knows nothing about
+       this game, so there is nothing to read and nothing to send. Load
+       none of it: the game gets the IOP it would have got without us. */
+    if (config->raWatchCount > 0) {
+        /* RA disc mode: no OPL cdvdman, hence no built-in DEV9; SMAP
+           needs it loaded first. */
+        if (config->GameMode == DISC_MODE) {
+            LoadOPLModule(OPL_MODULE_ID_DEV9, 0, 0, NULL);
+            LoadOPLModule(OPL_MODULE_ID_SMSUTILS, 0, 0, NULL);
+        }
 
-    if (config->GameMode != ETH_MODE) {
-        LoadOPLModule(OPL_MODULE_ID_SMSTCPIP, 0, 0, NULL);
-        ra_smap_result = LoadOPLModule(OPL_MODULE_ID_SMAP, 0, g_ipconfig_len, g_ipconfig);
+        if (config->GameMode != ETH_MODE) {
+            LoadOPLModule(OPL_MODULE_ID_SMSTCPIP, 0, 0, NULL);
+            ra_smap_result = LoadOPLModule(OPL_MODULE_ID_SMAP, 0, g_ipconfig_len, g_ipconfig);
+        }
     }
 #endif
 
@@ -200,8 +205,8 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
        allocated in the IOP heap here, while the heap is up and the game
        has not started, and its address is passed as a load argument.
        RA_SNAP_TOTAL covers the header plus the values of the largest
-       supported watch list. */
-    {
+       supported watch list. Skipped with no watch list, as above. */
+    if (config->raWatchCount > 0) {
         char snap_arg[9];
         void *snap = SifAllocIopHeap(RA_SNAP_TOTAL);
 
