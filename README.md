@@ -1,6 +1,63 @@
-# Open PS2 Loader
+<p align="center">
+  <img src="gfx/xerabora-ra.png" alt="OPL + RA" width="760">
+</p>
 
-![logo](https://github.com/ps2homebrew/Open-PS2-Loader/blob/master/gfx/logo.png)
+# Open PS2 Loader with a RetroAchievements agent
+
+A fork of [Open PS2 Loader](https://github.com/ps2homebrew/Open-PS2-Loader).
+Branch `ra` adds the console half of
+**[xeRAbora](https://github.com/hacan359/xerabora)**: it hashes the game
+the RetroAchievements way, asks the PC which addresses matter, then reads
+console memory every frame and streams it over UDP while you play. The PC
+runs rcheevos and unlocks the achievement on your profile. No emulator
+anywhere, and the loader still behaves like the OPL you know.
+
+**[Project page and setup walkthrough](https://hacan359.github.io/xerabora/)**
+
+## What the fork adds
+
+- **Two items in a game's menu.** `RA: check game support` hashes the
+  image and reports what RetroAchievements knows about it. `RA: test PC
+  connection` says whether the PC answered, from where and how fast.
+- **Telemetry while you play.** The in-game core reads the addresses the
+  achievement set needs and streams a snapshot every frame. It writes
+  nothing into the game or the image.
+- **A gold flash on the TV** when an achievement unlocks, sent back by
+  the PC over the same link.
+- **The disc in the tray as a source**, checked and launched from OPL's
+  main menu, with the same telemetry as an image on a stick.
+
+Softcore only, and an alpha: read the
+[limits](https://hacan359.github.io/xerabora/#limits) before you try.
+
+## Downloads
+
+Built here, published there: every
+[xeRAbora release](https://github.com/hacan359/xerabora/releases) carries
+`OPL-RA.ELF` and `OPL-RA-debug.ELF` next to the PC client. Put the ELF
+where your OPL apps live and launch it instead of OPL.
+
+## For anyone writing another agent
+
+The two halves talk over a small documented protocol,
+[`protocol/PROTOCOL.md`](https://github.com/hacan359/xerabora/blob/main/protocol/PROTOCOL.md).
+The PC client knows nothing about the PS2 beyond the memory it receives,
+so an agent for another console speaks the same wire and the client does
+the rest.
+
+## Branches
+
+`ra` carries the fork and is the branch to build. `master` mirrors
+ps2homebrew upstream and never takes our commits; upstream comes into
+`ra` by merge. The badges below belong to upstream's `master`, not to
+this branch: the builds for `ra` run in the xeRAbora repository.
+
+Licensed under the Academic Free License 3.0, the same as OPL. The
+upstream README follows, unchanged.
+
+---
+
+# Open PS2 Loader
 
 Copyright 2013, Ifcaro & jimmikaelkael
 Licensed under Academic Free License version 3.0
