@@ -82,7 +82,7 @@ static u8 ra_dst_mac[6];
    frame plus the work per pass missed one in twelve (lab/skips, 08.09). */
 #define RA_POLL_US         4000
 #define RA_IDLE_TICKS      4    /* no snapshot: one header-only packet per frame */
-#define RA_KEEPALIVE_TICKS 250  /* snapshot unchanged: repeat it once a second */
+#define RA_KEEPALIVE_TICKS 250  /* a second without a new snapshot: repeat the last */
 #define RA_HEARTBEAT_TICKS 2500 /* every ten seconds */
 
 /* ---- Frame layout ----------------------------------------------------
@@ -1072,6 +1072,7 @@ static void ra_heartbeat(void)
 static void ra_thread(void *arg)
 {
     u32 iter = 0;
+    u32 idle = 0; /* polls since the last new snapshot */
 
     (void)arg;
 
@@ -1086,10 +1087,16 @@ static void ra_thread(void *arg)
     for (;;) {
         int pending = ra_snap_pending();
 
-        if (pending > 0 ||
-            (pending < 0 && iter % RA_IDLE_TICKS == 0) ||
-            (pending == 0 && iter % RA_KEEPALIVE_TICKS == 0))
+        if (pending > 0) {
             ra_send_one();
+            idle = 0;
+        } else if (pending < 0) {
+            if (iter % RA_IDLE_TICKS == 0)
+                ra_send_one();
+        } else if (++idle >= RA_KEEPALIVE_TICKS) {
+            ra_send_one();
+            idle = 0;
+        }
         if (ra_rx_in_game && iter % RA_IDLE_TICKS == 0) {
             ra_drain_rx();
             ra_poll_pc();
