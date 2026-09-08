@@ -77,8 +77,13 @@ static u8 ra_dst_mac[6];
 /* Hold-off after start so the game can finish loading. */
 #define RA_QUIET_US (30 * 1000 * 1000)
 
-/* One snapshot per game frame at 60 Hz. */
-#define RA_PERIOD_US 16666
+/* The EE lands a snapshot every frame, 16.7 ms. Polling four times a
+   frame and sending only a new seq catches each one; sleeping a whole
+   frame plus the work per pass missed one in twelve (lab/skips, 08.09). */
+#define RA_POLL_US         4000
+#define RA_IDLE_TICKS      4    /* no snapshot: one header-only packet per frame */
+#define RA_KEEPALIVE_TICKS 250  /* snapshot unchanged: repeat it once a second */
+#define RA_HEARTBEAT_TICKS 2500 /* every ten seconds */
 
 /* ---- Frame layout ----------------------------------------------------
    One static Ethernet + IPv4 + UDP frame. Headers are filled once; each
@@ -113,8 +118,10 @@ static int ra_err = 0;      /* last error code */
 static u32 ra_us = 0;       /* time spent sending the last snapshot */
 static u32 ra_us_max = 0;   /* worst case */
 static u32 ra_rxq = 0;      /* controller receive FIFO depth at send time */
-static u32 ra_skip = 0;     /* frames skipped because the transmitter was busy */
-static u32 ra_snap_bad = 0; /* torn snapshots detected */
+static u32 ra_skip = 0;     /* sends deferred because the transmitter was busy */
+static u32 ra_snap_bad = 0; /* torn copies detected (retried on the next poll) */
+static u32 ra_sent_sq = 0;  /* seq of the last snapshot sent */
+static int ra_sent_any = 0;
 
 /* Snapshot buffer, owned by this module, written by the EE over SIF DMA.
    The address arrives as a load argument. */
@@ -161,12 +168,12 @@ static int ra_sock = -1;
 
    seq  packet counter            sq   snapshot number from the EE
    sz   payload size              ds   frames the EE skipped (DMA busy)
-   us   last send time, us        bad  torn snapshots seen here
+   us   last send time, us        bad  torn copies here, retried
    mx   worst send time, us       n    entries in the watch list
    rxq  receive FIFO depth        vb   value bytes in this packet
    fail send errors               pt   part index, from 0
    err  last error code           np   number of parts
-   sk   frames skipped, tx busy   id   game serial, padded with '~'
+   sk   sends deferred, tx busy   id   game serial, padded with '~'
    lk   link mode: speed (100/010/999) and duplex (F/H)
 
    "id" must stay last: the PC client finds the binary tail as the
@@ -556,7 +563,32 @@ static void ra_ctl_send(const char *msg, int len)
    Otherwise the EE could land the next frame between two sends and the
    parts would describe different moments; a condition such as
    "A == 1 and B == 2 in the same frame" would fire on a mix. */
-static u8 ra_stage[RA_SNAP_MAX_BYTES];
+static u8 ra_stage[RA_SNAP_MAX_BYTES] __attribute__((aligned(4)));
+
+/* Byte loops took the IOP most of a millisecond per snapshot; words when
+   both sides share alignment, halfwords when they share parity. */
+static void ra_copy(u8 *d, const u8 *src, u32 n)
+{
+    u32 i = 0;
+
+    if ((((u32)d ^ (u32)src) & 3) == 0) {
+        while (i < n && ((u32)(d + i) & 3) != 0) {
+            d[i] = src[i];
+            i++;
+        }
+        for (; i + 4 <= n; i += 4)
+            *(u32 *)(d + i) = *(const u32 *)(src + i);
+    } else if ((((u32)d ^ (u32)src) & 1) == 0) {
+        if (i < n && ((u32)(d + i) & 1) != 0) {
+            d[i] = src[i];
+            i++;
+        }
+        for (; i + 2 <= n; i += 2)
+            *(u16 *)(d + i) = *(const u16 *)(src + i);
+    }
+    for (; i < n; i++)
+        d[i] = src[i];
+}
 
 static void ra_send_one(void)
 {
@@ -569,11 +601,10 @@ static void ra_send_one(void)
 
     /* Checked once per snapshot, not per part: dropping the last part
        of three would waste the two already sent. Busy means the whole
-       snapshot is skipped. Pushing into a busy controller produced
-       duplicate frames on the wire. */
+       snapshot waits for the next poll. Pushing into a busy controller
+       produced duplicate frames on the wire. */
     if (ra_tx_busy()) {
         ra_skip++;
-        ra_seq++; /* the number is consumed so the PC sees the gap */
         return;
     }
 
@@ -594,20 +625,19 @@ static void ra_send_one(void)
 
         if (ra_snap->magic == RA_SNAP_MAGIC) {
             const u8 *src = (const u8 *)ra_snap + RA_SNAP_HDR;
-            u32 i, tail;
+            u32 tail;
 
             nb = ra_snap->bytes;
             if (nb > RA_SNAP_MAX_BYTES)
                 nb = RA_SNAP_MAX_BYTES;
 
-            for (i = 0; i < nb; i++)
-                ra_stage[i] = src[i];
+            ra_copy(ra_stage, src, nb);
 
             tail = *(volatile u32 *)((const u8 *)ra_snap + RA_SNAP_TRAILER_OFF(nb));
 
             if (tail != sq || ra_snap->seq != sq) {
                 ra_snap_bad++;
-                nb = 0;
+                return; /* the next poll copies it whole */
             } else {
                 ra_fmt(&ra_payload[RA_OFF(RA_F_SQ)], sq, 6);
                 ra_fmt(&ra_payload[RA_OFF(RA_F_DS)], ra_snap->dma_skip, 6);
@@ -633,7 +663,6 @@ static void ra_send_one(void)
     for (part = 0; part < parts; part++) {
         u32 off = part * ra_chunk;
         u32 len = nb > off ? nb - off : 0;
-        u32 i;
 
         if (len > ra_chunk)
             len = ra_chunk;
@@ -643,8 +672,7 @@ static void ra_send_one(void)
         ra_fmt(&ra_payload[RA_OFF(RA_F_PT)], part, 1);
         ra_fmt(&ra_payload[RA_OFF(RA_F_NP)], parts, 1);
 
-        for (i = 0; i < len; i++)
-            ra_payload[ra_head_len + i] = ra_stage[off + i];
+        ra_copy(&ra_payload[ra_head_len], &ra_stage[off], len);
 
         ret = SMAPSendPacket(ra_frame, RA_FRAME_LEN);
 
@@ -661,6 +689,19 @@ static void ra_send_one(void)
     ra_us = ra_usec_delta(&t0, &t1);
     if (ra_us > ra_us_max)
         ra_us_max = ra_us;
+
+    if (nb > 0) {
+        ra_sent_sq = ra_snap->seq;
+        ra_sent_any = 1;
+    }
+}
+
+/* -1: no snapshot to speak of; 1: one the PC has not seen; 0: sent already. */
+static int ra_snap_pending(void)
+{
+    if (ra_snap == NULL || ra_snap->magic != RA_SNAP_MAGIC)
+        return -1;
+    return (!ra_sent_any || ra_snap->seq != ra_sent_sq) ? 1 : 0;
 }
 
 /* ---- Discovery --------------------------------------------------------- */
@@ -1043,14 +1084,19 @@ static void ra_thread(void *arg)
         DelayThread(RA_QUIET_US - ra_disc_us);
 
     for (;;) {
-        ra_send_one();
-        if (ra_rx_in_game) {
+        int pending = ra_snap_pending();
+
+        if (pending > 0 ||
+            (pending < 0 && iter % RA_IDLE_TICKS == 0) ||
+            (pending == 0 && iter % RA_KEEPALIVE_TICKS == 0))
+            ra_send_one();
+        if (ra_rx_in_game && iter % RA_IDLE_TICKS == 0) {
             ra_drain_rx();
             ra_poll_pc();
         }
-        if (++iter % 600 == 0)
+        if (++iter % RA_HEARTBEAT_TICKS == 0)
             ra_heartbeat();
-        DelayThread(RA_PERIOD_US);
+        DelayThread(RA_POLL_US);
     }
 }
 
