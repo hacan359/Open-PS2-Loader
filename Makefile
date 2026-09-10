@@ -316,6 +316,8 @@ clean:	download_lwNBD
 	$(MAKE) -C modules/network/SMSTCPIP clean
 	echo " -in-game SMAP"
 	$(MAKE) -C modules/network/smap-ingame clean
+	echo " -usbd-ra"
+	$(MAKE) -C modules/usb/usbd-ra clean
 	echo " -smbman-ra"
 	$(MAKE) -C modules/network/smbman-ra clean
 	echo " -ps2ips-ra"
@@ -526,7 +528,12 @@ modules/isofs/isofs.irx: modules/isofs
 $(EE_ASM_DIR)isofs.c: modules/isofs/isofs.irx | $(EE_ASM_DIR)
 	$(BIN2C) $< $@ $(*F)_irx
 
-$(EE_ASM_DIR)usbd.c: $(PS2SDK)/iop/irx/usbd_mini.irx | $(EE_ASM_DIR)
+# RA: our usbd, ps2sdk's of April 2024. The rewrite that followed loses the
+# pad in CD-era games run off USB. See modules/usb/usbd-ra/Makefile.
+modules/usb/usbd-ra/usbd_mini.irx: $(wildcard modules/usb/usbd-ra/src/*.c) $(wildcard modules/usb/usbd-ra/src/*.h) $(wildcard modules/usb/usbd-ra/include/*.h) modules/usb/usbd-ra/src/imports.lst modules/usb/usbd-ra/src/exports.tab modules/usb/usbd-ra/Makefile
+	$(MAKE) -C modules/usb/usbd-ra rebuild
+
+$(EE_ASM_DIR)usbd.c: modules/usb/usbd-ra/usbd_mini.irx | $(EE_ASM_DIR)
 	$(BIN2C) $< $@ $(*F)_irx
 
 $(EE_ASM_DIR)libsd.c: $(PS2SDK)/iop/irx/libsd.irx | $(EE_ASM_DIR)

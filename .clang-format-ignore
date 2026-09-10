@@ -6,3 +6,4 @@
 ./include/md5.h
 ./modules/network/ps2ips-ra/ps2ips.c
 ./modules/network/smbman-ra
+./modules/usb/usbd-ra
