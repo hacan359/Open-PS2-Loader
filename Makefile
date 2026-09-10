@@ -316,6 +316,10 @@ clean:	download_lwNBD
 	$(MAKE) -C modules/network/SMSTCPIP clean
 	echo " -in-game SMAP"
 	$(MAKE) -C modules/network/smap-ingame clean
+	echo " -smbman-ra"
+	$(MAKE) -C modules/network/smbman-ra clean
+	echo " -ps2ips-ra"
+	$(MAKE) -C modules/network/ps2ips-ra clean
 	echo " -smbinit"
 	$(MAKE) -C modules/network/smbinit clean
 	echo " -nbns"
@@ -668,7 +672,12 @@ modules/network/ps2ips-ra/ps2ips.irx: $(wildcard modules/network/ps2ips-ra/*.c) 
 $(EE_ASM_DIR)ps2ips.c: modules/network/ps2ips-ra/ps2ips.irx | $(EE_ASM_DIR)
 	$(BIN2C) $< $@ $(*F)_irx
 
-$(EE_ASM_DIR)smbman.c: $(PS2SDK)/iop/irx/smbman.irx | $(EE_ASM_DIR)
+# RA: our smbman, so that an image a previous run left open on the server
+# can still be read. See modules/network/smbman-ra/smb.c.
+modules/network/smbman-ra/smbman.irx: $(wildcard modules/network/smbman-ra/*.c) $(wildcard modules/network/smbman-ra/*.h) modules/network/smbman-ra/imports.lst modules/network/smbman-ra/Makefile
+	$(MAKE) -C modules/network/smbman-ra rebuild
+
+$(EE_ASM_DIR)smbman.c: modules/network/smbman-ra/smbman.irx | $(EE_ASM_DIR)
 	$(BIN2C) $< $@ $(*F)_irx
 
 modules/network/smbinit/smbinit.irx: modules/network/smbinit

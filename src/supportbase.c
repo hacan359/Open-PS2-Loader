@@ -1101,6 +1101,7 @@ void sbHashGame(const char *path, const char *name, const char *ext, const char 
                  ret == -3 ? "ELF not found in directory" :
                  ret == -4 ? "odd ELF size" :
                  ret == -5 ? "read broke off" :
+                 ret == -6 ? "held by an earlier run: toggle the share" :
                              "?");
     }
 
