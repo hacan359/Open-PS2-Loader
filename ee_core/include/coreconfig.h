@@ -52,6 +52,10 @@ struct EECoreConfig_t
     u32 *raWatchList;
     int raWatchCount;
     int raSnapBytes;
+    /* Pointer chains: the address to read is held in memory and moves,
+       so ee_core resolves them each frame. Same story, same copy. */
+    void *raNodeList;
+    int raNodeCount;
 
     void *eeloadCopy;
     void *initUserMemory;

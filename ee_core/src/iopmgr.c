@@ -17,6 +17,7 @@
 #include "syshook.h"
 #include "coreconfig.h"
 #include "../../modules/network/common/ra_snap.h"
+#include "ra.h"
 #include "ra_overlay.h"
 
 extern int _iop_reboot_count;
@@ -166,8 +167,15 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
         }
 
         if (config->GameMode != ETH_MODE) {
-            LoadOPLModule(OPL_MODULE_ID_SMSTCPIP, 0, 0, NULL);
-            ra_smap_result = LoadOPLModule(OPL_MODULE_ID_SMAP, 0, g_ipconfig_len, g_ipconfig);
+            /* RA_PROBE (lab, 12.09): a ladder for the hunt after X-Men
+               Origins would not finish loading under the fork while it
+               runs on stock OPL. 1 loads nothing of ours, 2 the stack
+               only, 3 the stack and SMAP, 4 those and raudp but no
+               snapshots from the EE. 0, the default, is the real thing. */
+            if (RA_PROBE != 1)
+                LoadOPLModule(OPL_MODULE_ID_SMSTCPIP, 0, 0, NULL);
+            if (RA_PROBE != 1 && RA_PROBE != 2)
+                ra_smap_result = LoadOPLModule(OPL_MODULE_ID_SMAP, 0, g_ipconfig_len, g_ipconfig);
         }
     }
 #endif
@@ -206,7 +214,7 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
        has not started, and its address is passed as a load argument.
        RA_SNAP_TOTAL covers the header plus the values of the largest
        supported watch list. Skipped with no watch list, as above. */
-    if (config->raWatchCount > 0) {
+    if (config->raWatchCount > 0 && RA_PROBE != 1 && RA_PROBE != 2 && RA_PROBE != 3) {
         char snap_arg[9];
         void *snap = SifAllocIopHeap(RA_SNAP_TOTAL);
 
