@@ -46,6 +46,16 @@ struct EECoreConfig_t
     unsigned char g_ps2_ETHOpMode;
 
     u32 *gCheatList; // Store hooks/codes addr+val pairs
+    /* RetroAchievements: watched addresses for this game and the size of
+       one snapshot. The pointer leads into loader memory, which the game
+       overwrites, so ee_core copies the list during init (see ra.c). */
+    u32 *raWatchList;
+    int raWatchCount;
+    int raSnapBytes;
+    /* Pointer chains: the address to read is held in memory and moves,
+       so ee_core resolves them each frame. Same story, same copy. */
+    void *raNodeList;
+    int raNodeCount;
 
     void *eeloadCopy;
     void *initUserMemory;

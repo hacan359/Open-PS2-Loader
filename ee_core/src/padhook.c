@@ -35,6 +35,7 @@
 #include "cheat_api.h"
 #include "cd_igr_rpc.h"
 #include "coreconfig.h"
+#include "ra.h"
 
 /* scePadPortOpen & scePad2CreateSocket prototypes */
 static int (*scePadPortOpen)(int port, int slot, void *addr);
@@ -161,7 +162,12 @@ static void IGR_Thread(void *arg)
         if (EnableDebug)
             DBGCOL(0xFF8000, IGR, "oplIGRShutdown()");
 
-        oplIGRShutdown(0);
+        /* RA disc mode: the shutdown RPC server lives inside OPL's
+           cdvdman, which is not loaded; oplIGRShutdown would spin
+           forever waiting for it to bind. The ROM's cdvdman needs no
+           such notice. */
+        if (config->GameMode != DISC_MODE)
+            oplIGRShutdown(0);
 
         if (EnableDebug)
             DBGCOL(0x0000FF, IGR, "Reset IOP");
@@ -250,7 +256,10 @@ static void IGR_Thread(void *arg)
             DBGCOL(0x0000FF, IGR, "oplIGRShutdown(1)");
 
         // If combo is R3 + L3, Poweroff PS2
-        oplIGRShutdown(1);
+        // RA disc mode: same RPC, same missing server. The power-off
+        // combo does nothing there; the front button still works.
+        if (config->GameMode != DISC_MODE)
+            oplIGRShutdown(1);
     }
 }
 
@@ -271,6 +280,8 @@ static int IGR_Intc_Handler(int cause)
     USE_LOCAL_EECORE_CONFIG;
     int i;
     u8 pad_pos_state, pad_pos_frame, pad_pos_combo1, pad_pos_combo2;
+
+    RA_OnVblank(); /* RetroAchievements: per-frame memory snapshot */
 
     if (Pad_Data.pad_buf != NULL) {
         // Copy values via the uncached segment, to bypass the cache.
