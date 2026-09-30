@@ -234,7 +234,7 @@ void ClearWatchList(void)
 void raLaunchNote(const char *what, int a, int b)
 {
 #ifdef RA_DEBUG
-    static const char *dirs[] = {"smb0:RA", "mass0:RA", "hdd0:RA"};
+    static const char *dirs[] = {"smb0:RA", "mass0:RA", "mmce0:/RA", "hdd0:RA"};
     FILE *f = NULL;
     int i;
 

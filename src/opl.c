@@ -30,6 +30,7 @@
 #include "include/ethsupport.h"
 #include "include/hddsupport.h"
 #include "include/appsupport.h"
+#include "include/mmcesupport.h"
 
 #include "include/cheatman.h"
 #include "include/sound.h"
@@ -143,9 +144,13 @@ int gBDMStartMode;
 int gHDDStartMode;
 int gETHStartMode;
 int gAPPStartMode;
+int gMMCEStartMode;
 int bdmCacheSize;
 int hddCacheSize;
 int smbCacheSize;
+int gMMCEIGRSlot;
+int gMMCESlot;
+int gMMCEEnableGameID;
 int gEnableILK;
 int gEnableMX4SIO;
 int gEnableBdmHDD;
@@ -186,6 +191,7 @@ int gPS2Logo;
 int gDefaultDevice;
 int gEnableWrite;
 char gBDMPrefix[32];
+char gMMCEPrefix[32];
 char gETHPrefix[32];
 int gRememberLastPlayed;
 int KeyPressedOnce;
@@ -411,6 +417,8 @@ void initSupport(item_list_t *itemList, int mode, int force_reinit)
         startMode = gHDDStartMode;
     else if (mode == APP_MODE)
         startMode = gAPPStartMode;
+    else if (mode == MMCE_MODE)
+        startMode = gMMCEStartMode;
 
     if (startMode) {
         if (!mod->support) {
@@ -437,6 +445,7 @@ static void initAllSupport(int force_reinit)
     initSupport(ethGetObject(0), ETH_MODE, force_reinit || (gNetworkStartup >= ERROR_ETH_SMB_CONN));
     initSupport(hddGetObject(0), HDD_MODE, force_reinit);
     initSupport(appGetObject(0), APP_MODE, force_reinit);
+    initSupport(mmceGetObject(0), MMCE_MODE, force_reinit);
 }
 
 static void deinitAllSupport(int exception, int modeSelected)
@@ -967,6 +976,7 @@ static void _loadConfig()
             configGetInt(configOPL, CONFIG_OPL_DEFAULT_DEVICE, &gDefaultDevice);
             configGetInt(configOPL, CONFIG_OPL_ENABLE_WRITE, &gEnableWrite);
             configGetInt(configOPL, CONFIG_OPL_HDD_SPINDOWN, &gHDDSpindown);
+            configGetStrCopy(configOPL, CONFIG_OPL_MMCE_PREFIX, gMMCEPrefix, sizeof(gMMCEPrefix));
             configGetStrCopy(configOPL, CONFIG_OPL_BDM_PREFIX, gBDMPrefix, sizeof(gBDMPrefix));
             configGetStrCopy(configOPL, CONFIG_OPL_ETH_PREFIX, gETHPrefix, sizeof(gETHPrefix));
             configGetInt(configOPL, CONFIG_OPL_REMEMBER_LAST, &gRememberLastPlayed);
@@ -975,6 +985,12 @@ static void _loadConfig()
             configGetInt(configOPL, CONFIG_OPL_HDD_MODE, &gHDDStartMode);
             configGetInt(configOPL, CONFIG_OPL_ETH_MODE, &gETHStartMode);
             configGetInt(configOPL, CONFIG_OPL_APP_MODE, &gAPPStartMode);
+            configGetInt(configOPL, CONFIG_OPL_MMCE_MODE, &gMMCEStartMode);
+            configGetInt(configOPL, CONFIG_OPL_MMCE_SLOT, &gMMCESlot);
+            configGetInt(configOPL, CONFIG_OPL_MMCEIGR_SLOT, &gMMCEIGRSlot);
+#ifdef __DEBUG
+            configGetInt(configOPL, CONFIG_OPL_MMCE_GAMEID, &gMMCEEnableGameID);
+#endif
             configGetInt(configOPL, CONFIG_OPL_ENABLE_ILINK, &gEnableILK);
             configGetInt(configOPL, CONFIG_OPL_ENABLE_MX4SIO, &gEnableMX4SIO);
             configGetInt(configOPL, CONFIG_OPL_ENABLE_BDMHDD, &gEnableBdmHDD);
@@ -1134,6 +1150,7 @@ static void _saveConfig()
         configSetInt(configOPL, CONFIG_OPL_DEFAULT_DEVICE, gDefaultDevice);
         configSetInt(configOPL, CONFIG_OPL_ENABLE_WRITE, gEnableWrite);
         configSetInt(configOPL, CONFIG_OPL_HDD_SPINDOWN, gHDDSpindown);
+        configSetStr(configOPL, CONFIG_OPL_MMCE_PREFIX, gMMCEPrefix);
         configSetStr(configOPL, CONFIG_OPL_BDM_PREFIX, gBDMPrefix);
         configSetStr(configOPL, CONFIG_OPL_ETH_PREFIX, gETHPrefix);
         configSetInt(configOPL, CONFIG_OPL_REMEMBER_LAST, gRememberLastPlayed);
@@ -1142,6 +1159,12 @@ static void _saveConfig()
         configSetInt(configOPL, CONFIG_OPL_HDD_MODE, gHDDStartMode);
         configSetInt(configOPL, CONFIG_OPL_ETH_MODE, gETHStartMode);
         configSetInt(configOPL, CONFIG_OPL_APP_MODE, gAPPStartMode);
+        configSetInt(configOPL, CONFIG_OPL_MMCE_MODE, gMMCEStartMode);
+        configSetInt(configOPL, CONFIG_OPL_MMCE_SLOT, gMMCESlot);
+        configSetInt(configOPL, CONFIG_OPL_MMCEIGR_SLOT, gMMCEIGRSlot);
+#ifdef __DEBUG
+        configSetInt(configOPL, CONFIG_OPL_MMCE_GAMEID, gMMCEEnableGameID);
+#endif
         configSetInt(configOPL, CONFIG_OPL_BDM_CACHE, bdmCacheSize);
         configSetInt(configOPL, CONFIG_OPL_HDD_CACHE, hddCacheSize);
         configSetInt(configOPL, CONFIG_OPL_SMB_CACHE, smbCacheSize);
@@ -1199,8 +1222,8 @@ static void _saveConfig()
 
 void applyConfig(int themeID, int langID, int skipDeviceRefresh)
 {
-    if (gDefaultDevice < 0 || gDefaultDevice > APP_MODE)
-        gDefaultDevice = APP_MODE;
+    if (gDefaultDevice < 0 || gDefaultDevice > MMCE_MODE)
+        gDefaultDevice = MMCE_MODE;
 
     guiUpdateScrollSpeed();
 
@@ -1767,6 +1790,7 @@ static void setDefaults(void)
     gRememberLastPlayed = 0;
     gAutoStartLastPlayed = 9;
     gSelectButton = KEY_CIRCLE; // Default to Japan.
+    gMMCEPrefix[0] = '\0';
     gBDMPrefix[0] = '\0';
     gETHPrefix[0] = '\0';
     gEnableNotifications = 0;
@@ -1786,6 +1810,13 @@ static void setDefaults(void)
     gHDDStartMode = START_MODE_DISABLED;
     gETHStartMode = START_MODE_DISABLED;
     gAPPStartMode = START_MODE_DISABLED;
+    gMMCEStartMode = START_MODE_DISABLED;
+
+    gMMCESlot = 2; //Default to first Auto slot
+    gMMCEIGRSlot = 3;
+#ifdef __DEBUG
+    gMMCEEnableGameID = 1;
+#endif
 
     gEnableILK = 0;
     gEnableMX4SIO = 0;
@@ -1925,8 +1956,11 @@ static void miniInit(int mode)
             if (mode == BDM_MODE) {
                 configGetStrCopy(configOPL, CONFIG_OPL_BDM_PREFIX, gBDMPrefix, sizeof(gBDMPrefix));
                 configGetInt(configOPL, CONFIG_OPL_BDM_CACHE, &bdmCacheSize);
-            } else if (mode == HDD_MODE)
+            } else if (mode == HDD_MODE) {
                 configGetInt(configOPL, CONFIG_OPL_HDD_CACHE, &hddCacheSize);
+            } else if (mode == MMCE_MODE) {
+                configGetStrCopy(configOPL, CONFIG_OPL_MMCE_PREFIX, gMMCEPrefix, sizeof(gMMCEPrefix));
+            }
         }
     }
 }

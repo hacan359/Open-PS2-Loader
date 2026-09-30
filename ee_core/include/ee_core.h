@@ -76,6 +76,7 @@ enum GAME_MODE {
        load, and no CDVD emulation: the console's own CDVDMAN out of ROM
        serves cdrom0:. */
     DISC_MODE,
+    MMCE_MODE,
 };
 
 extern int EnableDebug;

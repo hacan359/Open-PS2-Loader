@@ -195,6 +195,9 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
             /* RA: nothing to load. The disc is served by the console's
                own CDVDMAN, which the IOPRP left in place. */
             break;
+        case MMCE_MODE:
+            LoadOPLModule(OPL_MODULE_ID_MMCEDRV, 0, 0, NULL);
+            break;
     };
 
     /* RetroAchievements telemetry module, loaded last because it imports
