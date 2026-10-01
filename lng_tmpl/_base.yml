@@ -707,8 +707,6 @@ gui_strings:
 - label: MMCEIGR_SLOT
   string: IGR Bootcard Slot(s)
 - label: HINT_MMCEIGR_SLOT
-  string: Switch to bootcard cmd will be sent to the selected slot(s) on IGR
-- label: MMCE_ADVANCED
-  string: Advanced
+  string: On in-game reset the selected slot(s) switch to the boot card
 - label: MMCE_SETTINGS
   string: MMCE Settings

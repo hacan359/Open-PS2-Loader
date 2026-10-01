@@ -18,7 +18,7 @@
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h> // fileXioIoctl, fileXioDevctl
 
-static char mmcePrefix[40]; // Contains the full path to the folder where all the games are.
+static char mmcePrefix[40]; // device plus the games folder, "mmce0:/<prefix>"
 static int mmceULSizePrev = -2;
 static time_t mmceModifiedCDPrev;
 static time_t mmceModifiedDVDPrev;
@@ -28,7 +28,7 @@ static base_game_info_t *mmceGames;
 // forward declaration
 static item_list_t mmceGameList;
 
-int mmceDetectSlot(void)
+static int mmceDetectSlot(void)
 {
     int ret = -1;
     if (fileXioDevctl("mmce0:/", 0x1, NULL, 0, NULL, 0) != -1) {
@@ -41,7 +41,7 @@ int mmceDetectSlot(void)
     return ret;
 }
 
-void mmceSetPrefix(void)
+static void mmceSetPrefix(void)
 {
     if (gMMCESlot == 0)
         sprintf(mmcePrefix, "mmce0:/%s", gMMCEPrefix);
@@ -68,16 +68,10 @@ void mmceInit(item_list_t *itemList)
     mmceGames = NULL;
 
     configGetInt(configGetByType(CONFIG_OPL), "usb_frames_delay", &mmceGameList.delay);
-    mmceGameList.updateDelay = -1; //No automatic updates
+    mmceGameList.updateDelay = -1; // no automatic updates
 
     mmceLoadModules();
-
-    if (gMMCESlot == 0)
-        sprintf(mmcePrefix, "mmce0:/");
-    else if (gMMCESlot == 1)
-        sprintf(mmcePrefix, "mmce1:/");
-    else if (gMMCESlot == 2)
-        mmceDetectSlot();
+    mmceSetPrefix();
 
     mmceGameList.enabled = 1;
 }
@@ -98,7 +92,7 @@ static int mmceNeedsUpdate(item_list_t *itemList)
     int result = 0;
     struct stat st;
 
-    //Hacky: check if slot was changed, update prefix if needed
+    // The slot setting may have changed since init.
     mmceSetPrefix();
 
     if (mmceULSizePrev == -2)
@@ -308,8 +302,7 @@ void mmceLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)
     if (configGetStrCopy(configSet, CONFIG_ITEM_ALTSTARTUP, filename, sizeof(filename)) == 0)
         strcpy(filename, game->startup);
 
-
-    //MMCEDRV settings
+    // mmcedrv settings
     if (gMMCESlot == 0)
         settings->port = 2;
     else if (gMMCESlot == 1)
@@ -323,25 +316,23 @@ void mmceLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)
         return;
     }
 
-    //TEMP: The fd given by sd2psx is not the same one we see here on the EE
-    //and ps2sdk_get_iop_fd does not seem to return the right value either
+    /* The game reads through this handle, so it stays open. The IOP-side
+       fd differs from the EE one; ioctl 0x80 asks mmceman for it. */
     settings->iso_fd = fileXioIoctl2(iso_file, 0x80, NULL, 0, NULL, 0);
 
     LOG("name: %s\n", game->name);
     LOG("start: %s\n", game->startup);
 
-    //Set gameid and poll card until ready
+    // Send the GameID and wait for the card to settle.
 #ifdef __DEBUG
     if (gMMCEEnableGameID) {
 #endif
 
-        // Send GameID to MMCE
         fileXioDevctl(mmcePrefix, 0x8, game->startup, (strlen(game->startup) + 1), NULL, 0);
 
-        for (int i = 0; i < 15; i++) {
+        for (i = 0; i < 15; i++) {
             sleep(1);
 
-            // Poll MMCE status until busy bit is clear
             if ((fileXioDevctl(mmcePrefix, 0x2, NULL, 0, NULL, 0) & 1) == 0) {
                 LOG("Set MMCE GameID to: %s\n", game->startup);
                 break;
@@ -351,19 +342,8 @@ void mmceLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)
     }
 #endif
 
-    //mcReset();
-    //mcInit(MC_TYPE_XMC);
-
     if (gAutoLaunchBDMGame == NULL)
         deinit(NO_EXCEPTION, MMCE_MODE); // CAREFUL: deinit will call mmceCleanUp, so mmceGames/game will be freed
-
-    /* No autolaunch yet
-    else {
-        miniDeinit(configSet);
-
-        free(gAutoLaunchBDMGame);
-        gAutoLaunchBDMGame = NULL;
-    }*/
 
     settings->common.zso_cache = 0;
 
@@ -394,7 +374,6 @@ static int mmceGetTextId(item_list_t *itemList)
 
 static int mmceGetIconId(item_list_t *itemList)
 {
-    //Reusing BDM icon for now
     int mode = MMCE_ICON;
 
     return mode;
@@ -407,9 +386,6 @@ static void mmceCleanUp(item_list_t *itemList, int exception)
         LOG("MMCESUPPORT CleanUp\n");
 
         free(mmceGames);
-
-        //      if ((exception & UNMOUNT_EXCEPTION) == 0)
-        //          ...
     }
 }
 
@@ -421,9 +397,6 @@ static void mmceShutdown(item_list_t *itemList)
 
         free(mmceGames);
     }
-
-    // As required by some (typically 2.5") HDDs, issue the SCSI STOP UNIT command to avoid causing an emergency park.
-    //fileXioDevctl("mass:", USBMASS_DEVCTL_STOP_ALL, NULL, 0, NULL, 0);
 }
 
 static int mmceCheckVMC(item_list_t *itemList, char *name, int createSize)
@@ -464,11 +437,3 @@ static item_list_t mmceGameList = {
     .itemShutdown = &mmceShutdown,
     .itemCheckVMC = &mmceCheckVMC,
     .itemIconId = &mmceGetIconId};
-
-void mmceInitSemaphore()
-{
-    // Create a semaphore so only one thread can load IOP modules at a time.
-    //if (mmceLoadModuleLock < 0) {
-    //    mmceLoadModuleLock = sbCreateSemaphore();
-    //}
-}

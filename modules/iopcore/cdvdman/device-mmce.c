@@ -1,4 +1,3 @@
-
 #include <stdint.h>
 
 #include "internal.h"
@@ -9,7 +8,8 @@
 
 extern struct cdvdman_settings_mmce cdvdman_settings;
 
-uint32_t (*fp_mmcedrv_get_size)(int fd);
+/* s64, -1 on failure: a 32-bit prototype would read that as a valid size. */
+int64_t (*fp_mmcedrv_get_size)(int fd);
 int (*fp_mmcedrv_read_sector)(int type, unsigned int sector_start, unsigned int sector_count, void *buffer);
 void (*fp_mmcedrv_config_set)(int setting, int value);
 int (*fp_mmcedrv_read)(int fd, int size, void *ptr);
@@ -45,11 +45,14 @@ int DeviceReady(void)
 
 void DeviceFSInit(void)
 {
-    uint64_t iso_size;
+    int64_t iso_size;
 
     // get modload export table
     modinfo_t info;
-    getModInfo("mmcedrv\0", &info);
+    if (!getModInfo("mmcedrv", &info)) {
+        DPRINTF("mmcedrv is not loaded\n");
+        return;
+    }
 
     //Get func ptrs
     fp_mmcedrv_get_size = (void *)info.exports[4];
@@ -104,6 +107,9 @@ int DeviceReadSectors(u64 lsn, void *buffer, unsigned int sectors)
 
     DPRINTF("%s(%u, 0x%p, %u)\n", __func__, (unsigned int)lsn, buffer, sectors);
 
+    if (fp_mmcedrv_read_sector == NULL)
+        return SCECdErREAD;
+
     WaitSema(mmce_io_sema);
     do {
         res = fp_mmcedrv_read_sector(cdvdman_settings.iso_fd, (u32)lsn, sectors, buffer);
@@ -111,16 +117,18 @@ int DeviceReadSectors(u64 lsn, void *buffer, unsigned int sectors)
     } while (res != sectors && retries < 3);
     SignalSema(mmce_io_sema);
 
-    if (retries == 3) {
-        DPRINTF("%s: Failed to read after 3 retires, sector: %u, count: %u, buffer: 0x%p\n", __func__, lsn, sectors, buffer);
+    /* Judge the last attempt: a read that succeeds on the third try also
+       leaves retries at 3. */
+    if (res != sectors) {
+        DPRINTF("%s: read failed, sector: %u, count: %u, buffer: 0x%p\n", __func__, (unsigned int)lsn, sectors, buffer);
         rv = SCECdErREAD;
     }
 
     return rv;
 }
 
-//TODO: For VMCs
-int mmce_read_offset(int fd, unsigned int offset, unsigned int size, unsigned char *buffer)
+/* VMC pages for mcemu. */
+void mmce_read_offset(int fd, unsigned int offset, unsigned int size, unsigned char *buffer)
 {
     DPRINTF("%s\n", __func__);
 
@@ -128,18 +136,14 @@ int mmce_read_offset(int fd, unsigned int offset, unsigned int size, unsigned ch
     fp_mmcedrv_lseek(fd, offset, 0);
     fp_mmcedrv_read(fd, size, buffer);
     SignalSema(mmce_io_sema);
-
-    return 1;
 }
 
-int mmce_write_offset(int fd, unsigned int offset, unsigned int size, const unsigned char *buffer)
+void mmce_write_offset(int fd, unsigned int offset, unsigned int size, const unsigned char *buffer)
 {
     DPRINTF("%s\n", __func__);
 
     WaitSema(mmce_io_sema);
     fp_mmcedrv_lseek(fd, offset, 0);
-    fp_mmcedrv_write(fd, size, buffer);
+    fp_mmcedrv_write(fd, size, (void *)buffer);
     SignalSema(mmce_io_sema);
-
-    return 1;
 }

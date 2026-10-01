@@ -57,7 +57,7 @@ static int eecoreInit(int argc, char **argv)
         config->GameMode = HDD_MODE;
     else if (!_strncmp(config->GameModeDesc, "DISC_MODE", 9))
         config->GameMode = DISC_MODE;
-    else if (!_strncmp(config->GameModeDesc, "MMCE_MODE", 8))
+    else if (!_strncmp(config->GameModeDesc, "MMCE_MODE", 9))
         config->GameMode = MMCE_MODE;
     DPRINTF("Game Mode = %d %s\n", config->GameMode, config->GameModeDesc);
 

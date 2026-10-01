@@ -1222,8 +1222,8 @@ static void _saveConfig()
 
 void applyConfig(int themeID, int langID, int skipDeviceRefresh)
 {
-    if (gDefaultDevice < 0 || gDefaultDevice > MMCE_MODE)
-        gDefaultDevice = MMCE_MODE;
+    if (gDefaultDevice < 0 || gDefaultDevice >= MODE_COUNT)
+        gDefaultDevice = APP_MODE;
 
     guiUpdateScrollSpeed();
 
@@ -1812,7 +1812,7 @@ static void setDefaults(void)
     gAPPStartMode = START_MODE_DISABLED;
     gMMCEStartMode = START_MODE_DISABLED;
 
-    gMMCESlot = 2; //Default to first Auto slot
+    gMMCESlot = 2; // auto
     gMMCEIGRSlot = 3;
 #ifdef __DEBUG
     gMMCEEnableGameID = 1;
