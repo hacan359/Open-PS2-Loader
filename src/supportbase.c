@@ -583,8 +583,7 @@ int sbReadList(base_game_info_t **list, const char *prefix, int *fsize, int *gam
     return count;
 }
 
-/* "mass0:/games/" -> "mass0:/". POPStarter reads POPS/ at the device
-   root only, whatever folder OPL keeps its own games in. */
+/* "mass0:/games/" -> "mass0:/": POPStarter reads POPS/ at the root only */
 void sbDeviceRoot(const char *prefix, char *out, int max)
 {
     const char *colon = strchr(prefix, ':');
@@ -599,9 +598,8 @@ void sbDeviceRoot(const char *prefix, char *out, int max)
     out[n] = '\0';
 }
 
-/* PS1: POPS/<name>.VCD at the device root, appended to a list sbReadList
-   has built. The boot name comes out of each image's SYSTEM.CNF, so the
-   watch list, the config and the RA badge key on the serial as for PS2. */
+/* The serial comes from each image's SYSTEM.CNF, so the watch list, the
+   config and the RA badge key on it as for PS2. */
 int sbAppendVcdList(base_game_info_t **list, const char *prefix, int *gamecount)
 {
     char root[64], dirpath[128], vcd[256];
@@ -1165,17 +1163,17 @@ void sbHashGame(const char *path, const char *name, const char *ext, const char 
         return;
     }
 
-    /* PS1: one place to look, a different recipe, the same question to
-       the PC. The executable name comes back from the image. */
     if (strcasecmp(ext, ".VCD") == 0) {
         char root[64], boot[GAME_STARTUP_MAX + 1];
-        int ret, q;
+        int ret;
 
         sbDeviceRoot(path, root, sizeof(root));
         snprintf(iso, sizeof(iso), "%sPOPS/%s%s", root, name, ext);
         ret = raHashVcd(iso, boot, sizeof(boot), hash);
 
         if (ret == 0) {
+            int q;
+
             raHashLogAdd(name, boot, hash);
             raHashStep("6-asking-pc");
             q = raAskPC(hash, boot, path, info, sizeof(info), info2, sizeof(info2));

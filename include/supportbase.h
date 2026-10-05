@@ -6,8 +6,7 @@
 #define ISO_GAME_EXTENSION_MAX 4
 #define GAME_STARTUP_MAX       12
 
-/* A PS1 image for POPS (POPS/<name>.VCD at the device root). Not a CDVD
-   media code the loader ever sees: these entries go to POPStarter. */
+/* POPS/<name>.VCD; never reaches the loader, POPStarter runs it */
 #define SB_MEDIA_PS1 0x10
 
 #define ISO_GAME_FNAME_MAX (ISO_GAME_NAME_MAX + ISO_GAME_EXTENSION_MAX)

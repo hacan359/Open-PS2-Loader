@@ -21,13 +21,11 @@ int raHashDisc(const char *startup, char *out33);
    boot executable name, e.g. "SLUS_210.65". Returns 0 on success. */
 int raDiscBootFile(char *out, int max);
 
-/* RA: a PS1 image for POPS (.VCD), hashed as rcheevos hashes a PS1
-   disc. boot receives the executable name from SYSTEM.CNF, e.g.
-   "SLUS_012.15". Returns 0 on success. */
+/* RA: hash of a POPS image (.VCD) by rc_hash_psx. boot receives the
+   executable name, e.g. "SLUS_012.15". Returns 0 on success. */
 int raHashVcd(const char *vcdpath, char *boot, int boot_max, char *out33);
 
-/* RA: only the executable name out of a VCD's SYSTEM.CNF, for the game
-   list. Four small reads, no hashing. Returns 0 on success. */
+/* RA: the executable name only, for the game list. Returns 0 on success. */
 int raVcdBootName(const char *vcdpath, char *boot, int boot_max);
 
 #endif

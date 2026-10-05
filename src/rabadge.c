@@ -129,16 +129,15 @@ void raBadgeRefresh(item_list_t *support, int count)
     }
 }
 
-/* Only BDM pages carry PS1 entries, and only game pages hand out
-   base_game_info_t from itemGet; apps do not. */
+/* only BDM pages carry PS1 entries; APP's itemGet is not a game */
 int raItemIsPs1(item_list_t *support, int idx)
 {
-    base_game_info_t *g;
+    const base_game_info_t *g;
 
     if (support == NULL || support->mode >= ETH_MODE || support->itemGet == NULL)
         return 0;
 
-    g = (base_game_info_t *)support->itemGet(support, idx);
+    g = (const base_game_info_t *)support->itemGet(support, idx);
     return g != NULL && g->media == SB_MEDIA_PS1;
 }
 
