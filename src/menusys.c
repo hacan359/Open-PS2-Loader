@@ -428,6 +428,8 @@ static submenu_list_t *submenuAllocItem(int icon_id, char *text, int id, int tex
     it->item.id = id;
     it->item.cache_id = NULL;
     it->item.cache_uid = NULL;
+    it->item.group = 0;
+    it->item.key = NULL;
     submenuRebuildCache(it);
 
     return it;
@@ -590,10 +592,15 @@ void submenuSort(submenu_list_t **submenu)
         while (tip->next) {
             submenu_list_t *nxt = tip->next;
 
-            char *txt1 = submenuItemGetText(&tip->item);
-            char *txt2 = submenuItemGetText(&nxt->item);
+            char *txt1 = tip->item.key ? tip->item.key : submenuItemGetText(&tip->item);
+            char *txt2 = nxt->item.key ? nxt->item.key : submenuItemGetText(&nxt->item);
+            int cmp = 0;
 
-            int cmp = strcasecmp(txt1, txt2);
+            /* 1: PS2 first, 2: PS1 first, 0: one list by name */
+            if (gPs1Sort != 0 && tip->item.group != nxt->item.group)
+                cmp = (tip->item.group - nxt->item.group) * (gPs1Sort == 1 ? 1 : -1);
+            if (cmp == 0)
+                cmp = strcasecmp(txt1, txt2);
 
             if (cmp > 0) {
                 swap(tip, nxt);

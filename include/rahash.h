@@ -26,4 +26,8 @@ int raDiscBootFile(char *out, int max);
    "SLUS_012.15". Returns 0 on success. */
 int raHashVcd(const char *vcdpath, char *boot, int boot_max, char *out33);
 
+/* RA: only the executable name out of a VCD's SYSTEM.CNF, for the game
+   list. Four small reads, no hashing. Returns 0 on success. */
+int raVcdBootName(const char *vcdpath, char *boot, int boot_max);
+
 #endif

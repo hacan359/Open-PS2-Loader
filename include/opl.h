@@ -132,6 +132,7 @@ extern int gEnableMX4SIO;
 extern int gEnableBdmHDD;
 
 extern int gAutosort;
+extern int gPs1Sort; // 0 mixed by name, 1 PS2 first, 2 PS1 first
 extern int gAutoRefresh;
 extern int gEnableNotifications;
 extern int gEnableArt;

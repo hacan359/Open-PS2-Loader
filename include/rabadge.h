@@ -17,4 +17,7 @@ const char *raBadgeText(item_list_t *support, int idx);
 /* Whether the game is tracked. Used for the mark over the cover. */
 int raBadgeHas(item_list_t *support, int idx);
 
+/* 1 when the entry is a PS1 image (a .VCD in POPS/ on a BDM device). */
+int raItemIsPs1(item_list_t *support, int idx);
+
 #endif

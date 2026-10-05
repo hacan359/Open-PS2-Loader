@@ -19,6 +19,7 @@
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h> // fileXioIoctl, fileXioDevctl
 #include <delaythread.h>
+#include <elf-loader.h> // LoadELFFromFileWithPartition: the POPStarter handoff
 
 static int iLinkModLoaded = 0;
 static int mx4sioModLoaded = 0;
@@ -257,6 +258,7 @@ static int bdmUpdateGameList(item_list_t *itemList)
     bdm_device_data_t *pDeviceData = (bdm_device_data_t *)itemList->priv;
 
     sbReadList(&pDeviceData->bdmGames, pDeviceData->bdmPrefix, &pDeviceData->bdmULSizePrev, &pDeviceData->bdmGameCount);
+    sbAppendVcdList(&pDeviceData->bdmGames, pDeviceData->bdmPrefix, &pDeviceData->bdmGameCount);
     return pDeviceData->bdmGameCount;
 }
 
@@ -313,6 +315,73 @@ static void bdmRenameGame(item_list_t *itemList, int id, char *newName)
     pDeviceData->ForceRefresh = 1;
 }
 
+/* Copies src to dst in one go; POPSTARTER.ELF is about 160 KB. */
+static int bdmCopyFile(const char *src, const char *dst)
+{
+    int in, out, size, ok = 0;
+    void *buf;
+
+    if ((in = open(src, O_RDONLY)) < 0)
+        return -1;
+    size = getFileSize(in);
+    buf = size > 0 ? malloc(size) : NULL;
+    if (buf != NULL && read(in, buf, size) == size) {
+        if ((out = open(dst, O_WRONLY | O_CREAT | O_TRUNC)) >= 0) {
+            ok = write(out, buf, size) == size;
+            close(out);
+        }
+    }
+    free(buf);
+    close(in);
+
+    return ok ? 0 : -1;
+}
+
+/*
+  PS1: hand the console to POPStarter. It finds its device and the VCD
+  by string-parsing its own argv[0], and accepts only the bare "mass:"
+  form (RiptOPL's sysLaunchPopstarter, src/opl-nathan). The SDK loader
+  sets argv[0] to the path it loads, so we load XX.<name>.ELF by exactly
+  that path; mass: is unit 0 on the IOP.
+*/
+static void bdmLaunchVcd(item_list_t *itemList, bdm_device_data_t *pDeviceData, base_game_info_t *game)
+{
+    char root[64], path[256], selector[256];
+    int fd;
+
+    if (strcmp(pDeviceData->bdmDriver, "usb") != 0 || pDeviceData->massDeviceIndex != 0) {
+        guiMsgBox("PS1 games start only from the first USB device for now", 0, NULL);
+        return;
+    }
+
+    sbDeviceRoot(pDeviceData->bdmPrefix, root, sizeof(root));
+    snprintf(path, sizeof(path), "%sPOPS/XX.%s.ELF", root, game->name);
+
+    fd = open(path, O_RDONLY);
+    if (fd >= 0)
+        close(fd);
+    else {
+        char popstarter[128];
+
+        snprintf(popstarter, sizeof(popstarter), "%sPOPS/POPSTARTER.ELF", root);
+        if (bdmCopyFile(popstarter, path) != 0) {
+            guiMsgBox("POPS/POPSTARTER.ELF is missing on this device", 0, NULL);
+            return;
+        }
+    }
+
+    snprintf(selector, sizeof(selector), "mass:/POPS/XX.%s.ELF", game->name);
+    LOG("BDM: POPStarter %s\n", selector);
+
+    if (gRememberLastPlayed) {
+        configSetStr(configGetByType(CONFIG_LAST), "last_played", game->startup);
+        saveConfig(CONFIG_LAST, 0);
+    }
+
+    deinit(UNMOUNT_EXCEPTION, itemList->mode); // frees game; selector is a copy
+    LoadELFFromFileWithPartition(selector, "", 0, NULL);
+}
+
 void bdmLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)
 {
     int i, fd, iop_fd, index, compatmask = 0;
@@ -331,6 +400,11 @@ void bdmLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)
     if (gAutoLaunchBDMGame == NULL) {
         pDeviceData = (bdm_device_data_t *)itemList->priv;
         game = &pDeviceData->bdmGames[id];
+
+        if (game->media == SB_MEDIA_PS1) {
+            bdmLaunchVcd(itemList, pDeviceData, game);
+            return;
+        }
     } else {
         pDeviceData = gAutoLaunchDeviceData;
         game = gAutoLaunchBDMGame;

@@ -6,6 +6,10 @@
 #define ISO_GAME_EXTENSION_MAX 4
 #define GAME_STARTUP_MAX       12
 
+/* A PS1 image for POPS (POPS/<name>.VCD at the device root). Not a CDVD
+   media code the loader ever sees: these entries go to POPStarter. */
+#define SB_MEDIA_PS1 0x10
+
 #define ISO_GAME_FNAME_MAX (ISO_GAME_NAME_MAX + ISO_GAME_EXTENSION_MAX)
 
 enum GAME_FORMAT {
@@ -41,6 +45,8 @@ int isValidIsoName(char *name, int *pNameLen);
 int sbIsSameSize(const char *prefix, int prevSize);
 int sbCreateSemaphore(void);
 int sbReadList(base_game_info_t **list, const char *prefix, int *fsize, int *gamecount);
+int sbAppendVcdList(base_game_info_t **list, const char *prefix, int *gamecount);
+void sbDeviceRoot(const char *prefix, char *out, int max);
 int sbPrepare(base_game_info_t *game, config_set_t *configSet, int size_cdvdman, void **cdvdman_irx, int *patchindex);
 void sbUnprepare(void *pCommon);
 void sbRebuildULCfg(base_game_info_t **list, const char *prefix, int gamecount, int excludeID);

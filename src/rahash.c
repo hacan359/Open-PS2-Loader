@@ -777,6 +777,33 @@ static int hash_psx(int fd, char *boot, int boot_max, char *out33)
     return 0;
 }
 
+int raVcdBootName(const char *vcdpath, char *boot, int boot_max)
+{
+    unsigned int lba, size;
+    char cnf[ISO_SECTOR];
+    int fd, got, ret = -1;
+
+    boot[0] = '\0';
+    fd = open(vcdpath, O_RDONLY);
+    if (fd < 0)
+        return -1;
+
+    g_vcd = 1;
+    if (find_path(fd, "SYSTEM.CNF", &lba, &size) == 0 && size > 0) {
+        if (size > sizeof(cnf) - 1)
+            size = sizeof(cnf) - 1;
+        got = read_at(fd, (long long)lba * ISO_SECTOR, cnf, (int)size);
+        if (got > 0) {
+            cnf[got] = '\0';
+            ret = parse_boot_psx(cnf, boot, boot_max);
+        }
+    }
+    g_vcd = 0;
+    close(fd);
+
+    return ret;
+}
+
 int raHashVcd(const char *vcdpath, char *boot, int boot_max, char *out33)
 {
     int ret, fd;

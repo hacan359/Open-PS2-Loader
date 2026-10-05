@@ -583,6 +583,75 @@ int sbReadList(base_game_info_t **list, const char *prefix, int *fsize, int *gam
     return count;
 }
 
+/* "mass0:/games/" -> "mass0:/". POPStarter reads POPS/ at the device
+   root only, whatever folder OPL keeps its own games in. */
+void sbDeviceRoot(const char *prefix, char *out, int max)
+{
+    const char *colon = strchr(prefix, ':');
+    int n = colon != NULL ? (int)(colon - prefix) + 1 : 0;
+
+    if (n > 0 && prefix[n] == '/')
+        n++;
+    if (n >= max)
+        n = max - 1;
+
+    memcpy(out, prefix, n);
+    out[n] = '\0';
+}
+
+/* PS1: POPS/<name>.VCD at the device root, appended to a list sbReadList
+   has built. The boot name comes out of each image's SYSTEM.CNF, so the
+   watch list, the config and the RA badge key on the serial as for PS2. */
+int sbAppendVcdList(base_game_info_t **list, const char *prefix, int *gamecount)
+{
+    char root[64], dirpath[128], vcd[256];
+    struct dirent *dirent;
+    DIR *dir;
+    int added = 0;
+
+    sbDeviceRoot(prefix, root, sizeof(root));
+    snprintf(dirpath, sizeof(dirpath), "%sPOPS", root);
+
+    if ((dir = opendir(dirpath)) == NULL)
+        return 0;
+
+    while ((dirent = readdir(dir)) != NULL) {
+        int len = strlen(dirent->d_name);
+        base_game_info_t *grown, *g;
+
+        if (len <= 4 || strcasecmp(&dirent->d_name[len - 4], ".VCD") != 0)
+            continue;
+        if (len - 4 > ISO_GAME_NAME_MAX || strncasecmp(dirent->d_name, "POPSTARTER.", 11) == 0)
+            continue;
+
+        grown = realloc(*list, sizeof(base_game_info_t) * (*gamecount + 1));
+        if (grown == NULL)
+            break;
+        *list = grown;
+
+        g = &(*list)[*gamecount];
+        memset(g, 0, sizeof(base_game_info_t));
+        memcpy(g->name, dirent->d_name, len - 4);
+        g->name[len - 4] = '\0';
+        strcpy(g->extension, ".VCD");
+
+        snprintf(vcd, sizeof(vcd), "%s/%s", dirpath, dirent->d_name);
+        if (raVcdBootName(vcd, g->startup, sizeof(g->startup)) != 0) {
+            strncpy(g->startup, g->name, GAME_STARTUP_MAX);
+            g->startup[GAME_STARTUP_MAX] = '\0';
+        }
+
+        g->parts = 1;
+        g->media = SB_MEDIA_PS1;
+        g->format = GAME_FORMAT_ISO;
+        (*gamecount)++;
+        added++;
+    }
+    closedir(dir);
+
+    return added;
+}
+
 extern int probed_fd;
 extern u32 probed_lba;
 extern u8 IOBuffer[2048];
@@ -818,6 +887,13 @@ static void sbCreatePath_name(const base_game_info_t *game, char *path, const ch
             snprintf(path, 256, "%sul.%08X.%s.%02x", prefix, USBA_crc32(game_name), game->startup, part);
             break;
         case GAME_FORMAT_ISO:
+            if (game->media == SB_MEDIA_PS1) {
+                char root[64];
+
+                sbDeviceRoot(prefix, root, sizeof(root));
+                snprintf(path, 256, "%sPOPS%s%s%s", root, sep, game_name, game->extension);
+                break;
+            }
             snprintf(path, 256, "%s%s%s%s%s", prefix, (game->media == SCECdPS2CD) ? "CD" : "DVD", sep, game_name, game->extension);
             break;
         case GAME_FORMAT_OLD_ISO:
@@ -1084,6 +1160,32 @@ void sbHashGame(const char *path, const char *name, const char *ext, const char 
         raHashLogAdd(name, startup, "UL: not an image, not supported yet");
         guiShowRANotice("UL/USBExtreme games cannot be checked yet",
                         "Only plain .iso images in DVD/ or CD/ are supported");
+        raHashSetStepLog(NULL);
+        raHashLogClose();
+        return;
+    }
+
+    /* PS1: one place to look, a different recipe, the same question to
+       the PC. The executable name comes back from the image. */
+    if (strcasecmp(ext, ".VCD") == 0) {
+        char root[64], boot[GAME_STARTUP_MAX + 1];
+        int ret, q;
+
+        sbDeviceRoot(path, root, sizeof(root));
+        snprintf(iso, sizeof(iso), "%sPOPS/%s%s", root, name, ext);
+        ret = raHashVcd(iso, boot, sizeof(boot), hash);
+
+        if (ret == 0) {
+            raHashLogAdd(name, boot, hash);
+            raHashStep("6-asking-pc");
+            q = raAskPC(hash, boot, path, info, sizeof(info), info2, sizeof(info2));
+            raShowAskResult(q, "image", info, info2, hash);
+        } else {
+            snprintf(last_err, sizeof(last_err), "VCD: code %d", ret);
+            raHashLogAdd(name, startup, last_err);
+            guiShowRANotice("The PS1 image could not be hashed", last_err);
+        }
+
         raHashSetStepLog(NULL);
         raHashLogClose();
         return;

@@ -25,9 +25,10 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#define RA_BADGE       "RA " /* prefix before the name; ASCII only, the stock \
-                                theme font has no other glyphs */
-#define RA_BADGE_SLOTS 4     /* OPL has exactly this many devices: BDM, ETH, HDD, APP */
+#define RA_BADGE       "RA "  /* prefix before the name; ASCII only, the stock \
+                                 theme font has no other glyphs */
+#define PS1_BADGE      "PS1 " /* a POPS image, see sbAppendVcdList */
+#define RA_BADGE_SLOTS 4      /* OPL has exactly this many devices: BDM, ETH, HDD, APP */
 #define RA_BADGE_TEXT  (ISO_GAME_NAME_MAX + 8)
 
 struct ra_badge_slot
@@ -117,12 +118,28 @@ void raBadgeRefresh(item_list_t *support, int count)
         char *dst = slot->text + (size_t)i * RA_BADGE_TEXT;
         const char *serial = support->itemGetStartup(support, i);
 
-        if (watchListExists(prefix, serial))
-            snprintf(dst, RA_BADGE_TEXT, "%s%s", RA_BADGE,
+        const char *ra = watchListExists(prefix, serial) ? RA_BADGE : "";
+        const char *ps1 = raItemIsPs1(support, i) ? PS1_BADGE : "";
+
+        if (ra[0] != '\0' || ps1[0] != '\0')
+            snprintf(dst, RA_BADGE_TEXT, "%s%s%s", ra, ps1,
                      support->itemGetName(support, i));
         else
             dst[0] = '\0'; /* empty means show the plain name */
     }
+}
+
+/* Only BDM pages carry PS1 entries, and only game pages hand out
+   base_game_info_t from itemGet; apps do not. */
+int raItemIsPs1(item_list_t *support, int idx)
+{
+    base_game_info_t *g;
+
+    if (support == NULL || support->mode >= ETH_MODE || support->itemGet == NULL)
+        return 0;
+
+    g = (base_game_info_t *)support->itemGet(support, idx);
+    return g != NULL && g->media == SB_MEDIA_PS1;
 }
 
 int raBadgeHas(item_list_t *support, int idx)

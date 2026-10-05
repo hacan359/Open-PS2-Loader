@@ -21,6 +21,12 @@ typedef struct submenu_item
 
     int *cache_id;
     int *cache_uid;
+
+    /// 0 for PS2, 1 for PS1; the sort can order by it (gPs1Sort)
+    int group;
+
+    /// name to sort by when the shown text carries badges; NULL means the text
+    char *key;
 } submenu_item_t;
 
 typedef struct submenu_list
