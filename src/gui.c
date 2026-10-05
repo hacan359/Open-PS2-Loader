@@ -724,7 +724,6 @@ void guiShowUIConfig(void)
         , "NTSC 640x224p @60Hz 24bit"
         , NULL};
     // clang-format on
-    const char *ps1SortNames[] = {"Mixed, by name", "PS2 first", "PS1 first", NULL};
     int previousVMode;
     int previousTheme;
 
@@ -734,11 +733,9 @@ reselect_video_mode:
     diaSetEnum(diaUIConfig, UICFG_THEME, (const char **)thmGetGuiList());
     diaSetEnum(diaUIConfig, UICFG_LANG, (const char **)lngGetGuiList());
     diaSetEnum(diaUIConfig, UICFG_VMODE, vmodeNames);
-    diaSetEnum(diaUIConfig, UICFG_PS1SORT, ps1SortNames);
     diaSetInt(diaUIConfig, UICFG_THEME, thmGetGuiValue());
     diaSetInt(diaUIConfig, UICFG_LANG, lngGetGuiValue());
     diaSetInt(diaUIConfig, UICFG_AUTOSORT, gAutosort);
-    diaSetInt(diaUIConfig, UICFG_PS1SORT, gPs1Sort);
     diaSetInt(diaUIConfig, UICFG_AUTOREFRESH, gAutoRefresh);
     diaSetInt(diaUIConfig, UICFG_NOTIFICATIONS, gEnableNotifications);
     diaSetInt(diaUIConfig, UICFG_COVERART, gEnableArt);
@@ -760,7 +757,6 @@ reselect_video_mode:
             diaGetColor(diaUIConfig, UICFG_SELCOL, gDefaultSelTextColor);
         }
         diaGetInt(diaUIConfig, UICFG_AUTOSORT, &gAutosort);
-        diaGetInt(diaUIConfig, UICFG_PS1SORT, &gPs1Sort);
         diaGetInt(diaUIConfig, UICFG_AUTOREFRESH, &gAutoRefresh);
         diaGetInt(diaUIConfig, UICFG_NOTIFICATIONS, &gEnableNotifications);
         diaGetInt(diaUIConfig, UICFG_COVERART, &gEnableArt);
@@ -1109,8 +1105,6 @@ static void guiHandleOp(struct gui_update_t *item)
 
         case GUI_OP_APPEND_MENU:
             result = submenuAppendItem(item->menu.subMenu, item->submenu.icon_id, item->submenu.text, item->submenu.id, item->submenu.text_id);
-            result->item.group = item->submenu.group;
-            result->item.key = item->submenu.key;
             if (!item->menu.menu->submenu) { // first subitem in list
                 item->menu.menu->submenu = result;
                 if (!item->submenu.selected) {

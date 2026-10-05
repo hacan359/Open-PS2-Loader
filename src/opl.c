@@ -155,7 +155,6 @@ int gEnableILK;
 int gEnableMX4SIO;
 int gEnableBdmHDD;
 int gAutosort;
-int gPs1Sort;
 int gAutoRefresh;
 int gEnableNotifications;
 int gEnableArt;
@@ -710,8 +709,6 @@ static void updateMenuFromGameList(opl_io_module_t *mdl)
                 const char *badge = raBadgeText(mdl->support, i);
 
                 gup->submenu.text = badge != NULL ? (char *)badge : mdl->support->itemGetName(mdl->support, i);
-                gup->submenu.key = mdl->support->itemGetName(mdl->support, i);
-                gup->submenu.group = raItemIsPs1(mdl->support, i);
             }
             gup->submenu.text_id = -1;
             gup->submenu.selected = 0;
@@ -975,7 +972,6 @@ static void _loadConfig()
             configGetInt(configOPL, CONFIG_OPL_HDD_GAME_LIST_CACHE, &gHDDGameListCache);
             configGetStrCopy(configOPL, CONFIG_OPL_EXIT_PATH, gExitPath, sizeof(gExitPath));
             configGetInt(configOPL, CONFIG_OPL_AUTO_SORT, &gAutosort);
-            configGetInt(configOPL, CONFIG_OPL_PS1_SORT, &gPs1Sort);
             configGetInt(configOPL, CONFIG_OPL_AUTO_REFRESH, &gAutoRefresh);
             configGetInt(configOPL, CONFIG_OPL_DEFAULT_DEVICE, &gDefaultDevice);
             configGetInt(configOPL, CONFIG_OPL_ENABLE_WRITE, &gEnableWrite);
@@ -1150,7 +1146,6 @@ static void _saveConfig()
         configSetInt(configOPL, CONFIG_OPL_HDD_GAME_LIST_CACHE, gHDDGameListCache);
         configSetStr(configOPL, CONFIG_OPL_EXIT_PATH, gExitPath);
         configSetInt(configOPL, CONFIG_OPL_AUTO_SORT, gAutosort);
-        configSetInt(configOPL, CONFIG_OPL_PS1_SORT, gPs1Sort);
         configSetInt(configOPL, CONFIG_OPL_AUTO_REFRESH, gAutoRefresh);
         configSetInt(configOPL, CONFIG_OPL_DEFAULT_DEVICE, gDefaultDevice);
         configSetInt(configOPL, CONFIG_OPL_ENABLE_WRITE, gEnableWrite);
@@ -1787,7 +1782,6 @@ static void setDefaults(void)
     gExitPath[0] = '\0';
     gDefaultDevice = APP_MODE;
     gAutosort = 1;
-    gPs1Sort = 0;
     gAutoRefresh = 0;
     gEnableDebug = 0;
     gPS2Logo = 0;
