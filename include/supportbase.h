@@ -6,6 +6,9 @@
 #define ISO_GAME_EXTENSION_MAX 4
 #define GAME_STARTUP_MAX       12
 
+/* POPS/<name>.VCD; never reaches the loader, POPStarter runs it */
+#define SB_MEDIA_PS1 0x10
+
 #define ISO_GAME_FNAME_MAX (ISO_GAME_NAME_MAX + ISO_GAME_EXTENSION_MAX)
 
 enum GAME_FORMAT {
@@ -41,6 +44,8 @@ int isValidIsoName(char *name, int *pNameLen);
 int sbIsSameSize(const char *prefix, int prevSize);
 int sbCreateSemaphore(void);
 int sbReadList(base_game_info_t **list, const char *prefix, int *fsize, int *gamecount);
+int sbAppendVcdList(base_game_info_t **list, const char *prefix, int *gamecount);
+void sbDeviceRoot(const char *prefix, char *out, int max);
 int sbPrepare(base_game_info_t *game, config_set_t *configSet, int size_cdvdman, void **cdvdman_irx, int *patchindex);
 void sbUnprepare(void *pCommon);
 void sbRebuildULCfg(base_game_info_t **list, const char *prefix, int gamecount, int excludeID);
@@ -56,5 +61,26 @@ int sbProbeISO9660(const char *path, base_game_info_t *game, u32 layer1_offset);
 int sbProbeISO9660_64(const char *path, base_game_info_t *game, u32 layer1_offset);
 
 int sbLoadCheats(const char *path, const char *file);
+int sbLoadWatchList(const char *path, const char *file);
+
+/* RetroAchievements: ask the PC client to answer, from the I/O thread;
+   the result is shown as a notice. Returns 1 when queued, 0 when a test
+   is already running. */
+int sbTestPCLinkDeferred(void);
+void raHashStep(const char *what);
+/* RA: the hash log, shared with the disc flow in discsupport.c. Open
+   before hashing, close after: raHashStep and ranet.c drop their crumbs
+   into whatever log is open. Debug build only; the release build has
+   these as no-ops. */
+void raHashLogOpen(const char *path);
+void raHashLogAdd(const char *name, const char *startup, const char *hash);
+void raHashLogClose(void);
+/* RA: the notice for what raAskPC returned, shared by the image and the
+   disc check. what is "image" or "disc". */
+void raShowAskResult(int q, const char *what, const char *info, const char *info2, const char *hash);
+void sbHashGame(const char *path, const char *name, const char *ext, const char *startup, int format);
+/* Same, but through OPL's I/O thread. From the menu call ONLY this one. */
+/* Returns 1 when queued, 0 when a check is already running. */
+int sbHashGameDeferred(const char *path, const char *name, const char *ext, const char *startup, int format);
 
 #endif

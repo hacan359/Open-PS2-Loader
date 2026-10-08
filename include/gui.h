@@ -131,6 +131,7 @@ void guiShowUIConfig();
 void guiShowAudioConfig();
 void guiShowControllerConfig();
 void guiShowNetConfig();
+void guiShowMMCEConfig();
 void guiShowParentalLockConfig();
 
 void guiCheckNotifications(int checkTheme, int checkLang);
@@ -151,6 +152,14 @@ void guiGameHandleDeferedIO(int *ptr, struct UIItem *ui, int type, void *data);
 void guiRenderTextScreen(const char *message);
 
 void guiWarning(const char *text, int count);
+
+/* RetroAchievements: a two-line notice shown for a few seconds, like the
+   partition/config popups. Safe to call from the I/O thread; line2 may
+   be NULL. */
+void guiShowRANotice(const char *line1, const char *line2);
+/* RA: draws the pending notice. Called every frame, outside the
+   "Notifications" setting -- see the note at the call site. */
+void guiShowRANotices(void);
 
 int guiConfirmVideoMode(void);
 

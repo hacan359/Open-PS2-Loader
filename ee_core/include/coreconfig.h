@@ -46,6 +46,21 @@ struct EECoreConfig_t
     unsigned char g_ps2_ETHOpMode;
 
     u32 *gCheatList; // Store hooks/codes addr+val pairs
+    /* RetroAchievements: watched addresses for this game and the size of
+       one snapshot. The loader places the list in module storage, right
+       behind the IOP modules, where the kernel leaves it alone for the
+       game's lifetime; ee_core uses it there (see ra.c and
+       src/rawatch.c, PlaceWatchBlock). */
+    u32 *raWatchList;
+    int raWatchCount;
+    int raSnapBytes;
+    /* Pointer chains: the address to read is held in memory and moves,
+       so ee_core resolves them each frame. They follow the entries in
+       the same block, with two scratch words per node behind them. */
+    void *raNodeList;
+    int raNodeCount;
+    /* The snapshot buffer, 64-byte aligned, in the same block. */
+    void *raSnapBuf;
 
     void *eeloadCopy;
     void *initUserMemory;
@@ -67,6 +82,8 @@ struct EECoreConfig_t
 
     int EnableGSMOp;
     struct GsmConfig_t GsmConfig;
+
+    int MMCEIGRSettings;
 };
 
 #define USE_LOCAL_EECORE_CONFIG struct EECoreConfig_t *config = &g_ee_core_config;

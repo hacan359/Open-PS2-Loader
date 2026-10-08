@@ -20,6 +20,7 @@ extern void *hdd_bd_png;
 extern void *hdd_png;
 extern void *eth_png;
 extern void *app_png;
+extern void *mmce_png;
 extern void *Index_0_png;
 extern void *Index_1_png;
 extern void *Index_2_png;
@@ -97,6 +98,7 @@ extern void *Vmode_pal_png;
 extern void *logo_png;
 extern void *case_png;
 extern void *apps_case_png;
+extern void *ra_mark_png; /* RA: mark over the cover */
 
 // Not related to screen size, just to limit at some point
 static int maxSize = 720 * 512 * 4;
@@ -143,6 +145,7 @@ static texture_t internalDefault[TEXTURES_COUNT] = {
     {HDD_ICON, "hdd", &hdd_png},
     {ETH_ICON, "eth", &eth_png},
     {APP_ICON, "app", &app_png},
+    {MMCE_ICON, "mmce", &mmce_png},
     {INDEX_0, "Index_0", &Index_0_png},
     {INDEX_1, "Index_1", &Index_1_png},
     {INDEX_2, "Index_2", &Index_2_png},
@@ -216,6 +219,7 @@ static texture_t internalDefault[TEXTURES_COUNT] = {
     {LOGO_PICTURE, "logo", &logo_png},
     {CASE_OVERLAY, "case", &case_png},
     {APPS_CASE_OVERLAY, "apps_case", &apps_case_png},
+    {RA_MARK, "ra_mark", &ra_mark_png},
 };
 
 int texLookupInternalTexId(const char *name)

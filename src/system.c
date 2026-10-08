@@ -15,9 +15,11 @@
 #include "include/util.h"
 #include "include/pad.h"
 #include "include/system.h"
+#include "include/rawatch.h"
 #include "include/ioman.h"
 #include "include/ioprp.h"
 #include "include/bdmsupport.h"
+#include "include/mmcesupport.h"
 #include "include/OSDHistory.h"
 #include "include/renderman.h"
 #include "include/extern_irx.h"
@@ -392,6 +394,7 @@ void sysExecExit(void)
 #define CORE_IRX_DECI2  0x40
 #define CORE_IRX_ILINK  0x80
 #define CORE_IRX_MX4SIO 0x100
+#define CORE_IRX_MMCE   0x200
 
 typedef struct
 {
@@ -467,7 +470,9 @@ static unsigned int sendIrxKernelRAM(const char *startup, const char *mode_str, 
     int i, modcount;
     unsigned int curIrxSize, size_ioprp_image, total_size;
 
-    if (!strcmp(mode_str, "BDM_USB_MODE"))
+    if (!strcmp(mode_str, "DISC_MODE"))
+        ; /* RA: the game comes off the drive; no storage driver needed */
+    else if (!strcmp(mode_str, "BDM_USB_MODE"))
         modules |= CORE_IRX_USB;
     else if (!strcmp(mode_str, "BDM_ILK_MODE"))
         modules |= CORE_IRX_ILINK;
@@ -477,15 +482,39 @@ static unsigned int sendIrxKernelRAM(const char *startup, const char *mode_str, 
         modules |= CORE_IRX_HDD;
     else if (!strcmp(mode_str, "ETH_MODE"))
         modules |= CORE_IRX_ETH | CORE_IRX_SMB;
-    else
+    else if (!strcmp(mode_str, "HDD_MODE"))
         modules |= CORE_IRX_HDD;
+    else if (!strcmp(mode_str, "MMCE_MODE"))
+        modules |= CORE_IRX_MMCE;
+
+    /* RA: telemetry goes over the network whatever the boot device, so
+       the network modules follow the game even off USB. Only when there
+       is something to send: they cost about 57 KB of the module storage
+       area (0x00097000) and put SMAP on the NIC for the whole run, and
+       an untracked game needs neither; with the modules in, the in-game
+       SMAP waits for a cable for ever. GetWatchCount() is decided by
+       now: every launch leg calls sbLoadWatchList first, and that drops
+       the list when the network is unusable, so a game launched without
+       telemetry loads exactly what a build without RA would. */
+    if (GetWatchCount() > 0)
+        modules |= CORE_IRX_ETH;
 
     irxtable = (irxtab_t *)ModuleStorage;
     irxptr_tab = (irxptr_t *)((unsigned char *)irxtable + sizeof(irxtab_t));
-    size_ioprp_image = size_IOPRP_img + size_cdvdman_irx + size_cdvdfsv_irx + size_eesync_irx + 256;
-    LOG("IOPRP image size calculated: %d\n", size_ioprp_image);
-    ioprp_image = malloc(size_ioprp_image);
-    size_ioprp_image = patch_IOPRP_image(ioprp_image, cdvdman_irx, size_cdvdman_irx);
+
+    /* RA: no cdvdman to substitute means the disc in the tray: build
+       the IOPRP that leaves the console's own drive driver in place. */
+    if (cdvdman_irx == NULL) {
+        size_ioprp_image = patch_IOPRP_image_disc_size();
+        LOG("IOPRP image size calculated: %d (disc, no CDVD emulation)\n", size_ioprp_image);
+        ioprp_image = malloc(size_ioprp_image);
+        size_ioprp_image = patch_IOPRP_image_disc(ioprp_image);
+    } else {
+        size_ioprp_image = size_IOPRP_img + size_cdvdman_irx + size_cdvdfsv_irx + size_eesync_irx + 256;
+        LOG("IOPRP image size calculated: %d\n", size_ioprp_image);
+        ioprp_image = malloc(size_ioprp_image);
+        size_ioprp_image = patch_IOPRP_image(ioprp_image, cdvdman_irx, size_cdvdman_irx);
+    }
     LOG("IOPRP image size actual:     %d\n", size_ioprp_image);
 
     modcount = 0;
@@ -498,6 +527,14 @@ static unsigned int sendIrxKernelRAM(const char *startup, const char *mode_str, 
     irxptr_tab[modcount++].ptr = (void *)&imgdrv_irx;
     irxptr_tab[modcount].info = size_resetspu_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_RESETSPU);
     irxptr_tab[modcount++].ptr = (void *)&resetspu_irx;
+
+    /* mmceigr switches an MMCE to its boot card on IGR. Only with the MMCE
+       page on: without one there is nothing to switch, and the IGR road is
+       also RESET CONSOLE's. */
+    if (gMMCEStartMode != START_MODE_DISABLED && gMMCEIGRSlot != 0) {
+        irxptr_tab[modcount].info = size_mmceigr_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_MMCEIGR);
+        irxptr_tab[modcount++].ptr = (void *)&mmceigr_irx;
+    }
 
 #ifdef PADEMU
 #define PADEMU_ARG || gEnablePadEmu
@@ -519,8 +556,25 @@ static unsigned int sendIrxKernelRAM(const char *startup, const char *mode_str, 
         irxptr_tab[modcount++].ptr = (void *)&IEEE1394_bd_irx;
     }
     if (modules & CORE_IRX_MX4SIO) {
+        // The menu's sio2man is gone after the in-game IOP reset, and
+        // mx4sio_bd imports it. ee_core loads the two in this order.
+        irxptr_tab[modcount].info = size_sio2man_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_SIO2MAN);
+        irxptr_tab[modcount++].ptr = (void *)&sio2man_irx;
         irxptr_tab[modcount].info = size_mx4sio_bd_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_MX4SIOBD);
         irxptr_tab[modcount++].ptr = (void *)&mx4sio_bd_irx;
+    }
+    /* RA disc mode: SMAP imports the dev9 library, which every other
+       mode gets from OPL's cdvdman. Here the ROM's cdvdman serves the
+       drive, so DEV9 travels as its own module -- the same ps2dev9.irx
+       the menu uses. Without it SMAP fails to load and the game runs
+       with no telemetry at all. */
+    if (cdvdman_irx == NULL) {
+        irxptr_tab[modcount].info = size_ps2dev9_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_DEV9);
+        irxptr_tab[modcount++].ptr = (void *)&ps2dev9_irx;
+        /* Likewise smsutils (mips_memcpy and friends), which SMSTCPIP
+           imports and OPL's cdvdman normally exports. */
+        irxptr_tab[modcount].info = size_smsutils_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_SMSUTILS);
+        irxptr_tab[modcount++].ptr = (void *)&smsutils_irx;
     }
     if (modules & CORE_IRX_ETH) {
         irxptr_tab[modcount].info = size_smap_ingame_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_SMAP);
@@ -533,9 +587,23 @@ static unsigned int sendIrxKernelRAM(const char *startup, const char *mode_str, 
         irxptr_tab[modcount++].ptr = (void *)&smbinit_irx;
     }
 
+    /* RA: the telemetry gateway rides with the network modules it
+       imports from (SMAPSendPacket, lwip_*); ee_core loads it only with
+       a list, so without one its 9.5 KB would sit in module storage for
+       nothing. */
+    if (modules & CORE_IRX_ETH) {
+        irxptr_tab[modcount].info = size_raudp_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_RAUDP);
+        irxptr_tab[modcount++].ptr = (void *)&raudp_irx;
+    }
+
     if (modules & CORE_IRX_VMC) {
         irxptr_tab[modcount].info = size_mcemu_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_MCEMU);
         irxptr_tab[modcount++].ptr = (void *)mcemu_irx;
+    }
+
+    if (modules & CORE_IRX_MMCE) {
+        irxptr_tab[modcount].info = size_mmcedrv_irx | SET_OPL_MOD_ID(OPL_MODULE_ID_MMCEDRV);
+        irxptr_tab[modcount++].ptr = (void *)mmcedrv_irx;
     }
 
 #ifdef PADEMU
@@ -840,12 +908,20 @@ void sysLaunchLoaderElf(const char *filename, const char *mode_str, int size_cdv
 #endif
 #endif
 
-    modules |= CORE_IRX_VMC;
+    /* RA: VMC lives inside OPL's own cdvdman, which the disc mode does
+       not load. Asking for it there would only waste module storage. */
+    if (size_cdvdman_irx > 0)
+        modules |= CORE_IRX_VMC;
 
     LOG("SYSTEM LaunchLoaderElf loading modules\n");
     ModuleStorageSize = (sendIrxKernelRAM(filename, mode_str, modules, ModuleStorage, size_cdvdman_irx, cdvdman_irx, size_mcemu_irx, mcemu_irx) + 0x3F) & ~0x3F;
 
     ModuleStorageEnd = (void *)((u8 *)ModuleStorage + ModuleStorageSize);
+
+    /* RA: the watch list rides behind the modules, so the kernel keeps
+       it out of the game's memory the same way. Nothing when the game
+       has no list. */
+    ModuleStorageEnd = PlaceWatchBlock(ModuleStorageEnd);
 
     // NB: LOADER.ELF is embedded
     boot_elf = (u8 *)&eecore_elf;
@@ -900,6 +976,8 @@ void sysLaunchLoaderElf(const char *filename, const char *mode_str, int size_cdv
     strncpy(config->ExitPath, gExitPath, CORE_EXIT_PATH_MAX_LEN);
     strncpy(config->GameModeDesc, mode_str, CORE_GAME_MODE_DESC_MAX_LEN);
 
+    config->MMCEIGRSettings = gMMCEStartMode != START_MODE_DISABLED ? gMMCEIGRSlot : 0;
+
     config->EnableDebug = gEnableDebug;
     config->HDDSpindown = gHDDSpindown;
     config->g_ps2_ETHOpMode = gETHOpMode;
@@ -909,6 +987,21 @@ void sysLaunchLoaderElf(const char *filename, const char *mode_str, int size_cdv
         config->gCheatList = GetCheatsList();
     } else
         config->gCheatList = NULL;
+
+    /* RA: the watch list for this game. It may be absent; telemetry then
+       carries no snapshot, which is not an error. */
+    config->raWatchList = GetWatchBlockList();
+    config->raWatchCount = GetWatchCount();
+    config->raSnapBytes = GetWatchBytes();
+    config->raNodeList = GetWatchBlockNodes();
+    config->raNodeCount = GetNodeCount();
+    config->raSnapBuf = GetWatchBlockSnap();
+
+    /* The last point where the list is still ours: from here it goes
+       into ee_core with no feedback. A zero here means the game runs
+       without telemetry, and the log shows it directly instead of
+       through empty packets on the PC. */
+    raLaunchNote("to-ee-core", config->raWatchCount, config->raSnapBytes);
 
     sprintf(config->g_ps2_ip, "%u.%u.%u.%u", local_ip_address[0], local_ip_address[1], local_ip_address[2], local_ip_address[3]);
     sprintf(config->g_ps2_netmask, "%u.%u.%u.%u", local_netmask[0], local_netmask[1], local_netmask[2], local_netmask[3]);

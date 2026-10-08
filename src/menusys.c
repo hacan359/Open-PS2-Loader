@@ -6,6 +6,8 @@
 
 #include "include/opl.h"
 #include "include/menusys.h"
+#include "include/supportbase.h"
+#include "include/discsupport.h"
 #include "include/iosupport.h"
 #include "include/renderman.h"
 #include "include/fntsys.h"
@@ -29,10 +31,13 @@ enum MENU_IDs {
     MENU_NET_CONFIG,
     MENU_NET_UPDATE,
     MENU_START_NBD,
+    MENU_MMCE_SETTINGS,
     MENU_ABOUT,
     MENU_SAVE_CHANGES,
     MENU_EXIT,
-    MENU_POWER_OFF
+    MENU_POWER_OFF,
+    MENU_RA_DISC_LAUNCH, /* RetroAchievements: boot the disc in the tray */
+    MENU_RA_DISC_CHECK,  /* RetroAchievements: hash the disc and ask the PC */
 };
 
 enum GAME_MENU_IDs {
@@ -50,6 +55,8 @@ enum GAME_MENU_IDs {
     GAME_REMOVE_CHANGES,
     GAME_RENAME_GAME,
     GAME_DELETE_GAME,
+    GAME_RA_CHECK, /* RetroAchievements: hash the image and ask the PC whether it is supported */
+    GAME_RA_TEST,  /* RetroAchievements: check that the PC client is reachable */
 };
 
 // global menu variables
@@ -212,6 +219,8 @@ static void menuInitMainMenu(void)
         submenuDestroy(&mainMenu);
 
     // initialize the menu
+    submenuAppendItem(&mainMenu, -1, "RA: launch disc", MENU_RA_DISC_LAUNCH, -1);
+    submenuAppendItem(&mainMenu, -1, "RA: check disc support", MENU_RA_DISC_CHECK, -1);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_SETTINGS, _STR_SETTINGS);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_GFX_SETTINGS, _STR_GFX_SETTINGS);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_AUDIO_SETTINGS, _STR_AUDIO_SETTINGS);
@@ -221,6 +230,7 @@ static void menuInitMainMenu(void)
     submenuAppendItem(&mainMenu, -1, NULL, MENU_NET_CONFIG, _STR_NETCONFIG);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_NET_UPDATE, _STR_NET_UPDATE);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_START_NBD, _STR_STARTNBD);
+    submenuAppendItem(&mainMenu, -1, NULL, MENU_MMCE_SETTINGS, _STR_MMCE_SETTINGS);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_ABOUT, _STR_ABOUT);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_SAVE_CHANGES, _STR_SAVE_CHANGES);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_EXIT, _STR_EXIT);
@@ -240,6 +250,8 @@ void menuInitGameMenu(void)
         submenuDestroy(&gameMenu);
 
     // initialize the menu
+    submenuAppendItem(&gameMenu, -1, "RA: check game support", GAME_RA_CHECK, -1);
+    submenuAppendItem(&gameMenu, -1, "RA: test PC connection", GAME_RA_TEST, -1);
     submenuAppendItem(&gameMenu, -1, NULL, GAME_COMPAT_SETTINGS, _STR_COMPAT_SETTINGS);
     submenuAppendItem(&gameMenu, -1, NULL, GAME_CHEAT_SETTINGS, _STR_CHEAT_SETTINGS);
     submenuAppendItem(&gameMenu, -1, NULL, GAME_GSM_SETTINGS, _STR_GSCONFIG);
@@ -779,7 +791,7 @@ void menuRenderMenu()
         // render, advance
         fntRenderString(gTheme->fonts[0], 320, y, ALIGN_CENTER, 0, 0, submenuItemGetText(&it->item), (cp == sitem) ? gTheme->selTextColor : gTheme->textColor);
         y += spacing;
-        if (cp == (MENU_ABOUT - 1))
+        if (it->item.id == MENU_ABOUT - 1) /* the gap before About, by item, not by position */
             y += spacing / 2;
     }
 
@@ -865,7 +877,15 @@ void menuHandleInputMenu()
 
         sfxPlay(SFX_CONFIRM);
 
-        if (id == MENU_SETTINGS) {
+        if (id == MENU_RA_DISC_LAUNCH) {
+            /* Does not return when the disc boots. */
+            discLaunch();
+        } else if (id == MENU_RA_DISC_CHECK) {
+            if (discCheckSupportDeferred())
+                guiShowRANotice("Checking the disc, this takes a few seconds...", NULL);
+            else
+                guiShowRANotice("A disc check is already running", NULL);
+        } else if (id == MENU_SETTINGS) {
             if (menuCheckParentalLock() == 0)
                 guiShowConfig();
         } else if (id == MENU_GFX_SETTINGS) {
@@ -892,6 +912,9 @@ void menuHandleInputMenu()
         } else if (id == MENU_START_NBD) {
             if (menuCheckParentalLock() == 0)
                 handleLwnbdSrv();
+        } else if (id == MENU_MMCE_SETTINGS) {
+            if (menuCheckParentalLock() == 0)
+                guiShowMMCEConfig();
         } else if (id == MENU_ABOUT) {
             guiShowAbout();
         } else if (id == MENU_SAVE_CHANGES) {
@@ -918,7 +941,7 @@ void menuHandleInputMenu()
 
     if (getKeyOn(KEY_START) || getKeyOn(gSelectButton == KEY_CIRCLE ? KEY_CROSS : KEY_CIRCLE)) {
         // Check if there is anything to show the user, at all.
-        if (gAPPStartMode || gETHStartMode || gBDMStartMode || gHDDStartMode) {
+        if (gAPPStartMode || gETHStartMode || gBDMStartMode || gHDDStartMode || gMMCEStartMode) {
             guiSwitchScreen(GUI_SCREEN_MAIN);
             refreshMenuPosition();
         }
@@ -1127,7 +1150,31 @@ void menuHandleInputGameMenu()
 
         sfxPlay(SFX_CONFIRM);
 
-        if (menuID == GAME_COMPAT_SETTINGS) {
+        if (menuID == GAME_RA_CHECK) {
+            /* RA: hash the selected image, on demand. Hashing every
+               image during the scan would hold the console on the
+               splash screen: the scan runs before the menu appears and
+               each image has to be opened and read. */
+            item_list_t *support = selected_item->item->userdata;
+            int gid = selected_item->item->current->item.id;
+
+            if (support != NULL && support->itemGet != NULL && support->itemGetPrefix != NULL) {
+                base_game_info_t *g = (base_game_info_t *)support->itemGet(support, gid);
+                char *prefix = support->itemGetPrefix(support);
+
+                if (g != NULL && prefix != NULL) {
+                    if (sbHashGameDeferred(prefix, g->name, g->extension, g->startup, g->format))
+                        guiShowRANotice("Checking the image, this takes a few seconds...", NULL);
+                    else
+                        guiShowRANotice("An image check is already running", NULL);
+                }
+            }
+        } else if (menuID == GAME_RA_TEST) {
+            if (sbTestPCLinkDeferred())
+                guiShowRANotice("Looking for the PC client...", NULL);
+            else
+                guiShowRANotice("A connection test is already running", NULL);
+        } else if (menuID == GAME_COMPAT_SETTINGS) {
             guiGameShowCompatConfig(selected_item->item->current->item.id, selected_item->item->userdata, itemConfig);
         } else if (menuID == GAME_CHEAT_SETTINGS) {
             guiGameShowCheatConfig();

@@ -36,7 +36,6 @@ static struct ip4_addr lastGW;
 static item_list_t ethGameList;
 static int ethWaitValidNetIFLinkState(void);
 static int ethWaitValidDHCPState(void);
-static int ethGetNetIFLinkStatus(void);
 static int ethApplyNetIFConfig(void);
 static int ethApplyIPConfig(void);
 static int ethReadNetConfig(void);
@@ -637,6 +636,8 @@ static void ethLaunchGame(item_list_t *itemList, int id, config_set_t *configSet
 
     compatmask = sbPrepare(game, configSet, size_smb_cdvdman_irx, smb_cdvdman_irx, &i);
 
+    sbLoadWatchList(ethPrefix, game->startup); /* RA: watch list */
+
     if ((result = sbLoadCheats(ethPrefix, game->startup)) < 0) {
         switch (result) {
             case -ENOENT:
@@ -867,7 +868,9 @@ static int ethApplyNetIFConfig(void)
     return result;
 }
 
-static int ethGetNetIFLinkStatus(void)
+/* RA: not static, raLaunchNetworkUp asks whether the cable is in before
+   it lets a telemetry launch through. */
+int ethGetNetIFLinkStatus(void)
 {
     return (NetManIoctl(NETMAN_NETIF_IOCTL_GET_LINK_STATUS, NULL, 0, NULL, 0) == NETMAN_NETIF_ETH_LINK_STATE_UP);
 }

@@ -13,6 +13,8 @@
 #include "syshook.h"
 #include "gsm_api.h"
 #include "cheat_api.h"
+#include "padhook.h"
+#include "ra.h"
 #include "coreconfig.h"
 
 int isInit = 0;
@@ -53,6 +55,10 @@ static int eecoreInit(int argc, char **argv)
         config->GameMode = ETH_MODE;
     else if (!_strncmp(config->GameModeDesc, "HDD_MODE", 8))
         config->GameMode = HDD_MODE;
+    else if (!_strncmp(config->GameModeDesc, "DISC_MODE", 9))
+        config->GameMode = DISC_MODE;
+    else if (!_strncmp(config->GameModeDesc, "MMCE_MODE", 9))
+        config->GameMode = MMCE_MODE;
     DPRINTF("Game Mode = %d %s\n", config->GameMode, config->GameModeDesc);
 
     EnableDebug = config->EnableDebug;
@@ -91,6 +97,11 @@ static int eecoreInit(int argc, char **argv)
     if (config->gCheatList) {
         EnableCheats();
     }
+
+    /* RetroAchievements: take the watch list from where the loader
+       placed it, behind the IOP modules in module storage. */
+    RA_SetupWatchList();
+    DPRINTF("RA watchlist = %d entries, %d bytes\n", config->raWatchCount, config->raSnapBytes);
 
     if (config->EnableGSMOp) {
         UpdateGSMParams(

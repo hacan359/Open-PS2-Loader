@@ -203,7 +203,7 @@ void guiShowAbout()
     char OPLVersion[40];
     char OPLBuildDetails[40];
 
-    snprintf(OPLVersion, sizeof(OPLVersion), "Open PS2 Loader %s", OPL_VERSION);
+    snprintf(OPLVersion, sizeof(OPLVersion), "OPL+RA %s", OPL_VERSION);
     diaSetLabel(diaAbout, ABOUT_TITLE, OPLVersion);
 
     snprintf(OPLBuildDetails, sizeof(OPLBuildDetails), "GSM %s"
@@ -262,12 +262,68 @@ static void guiRenderNotifications(char *string, int y)
     fntRenderString(gTheme->fonts[0], x - 5, y + 5, ALIGN_NONE, 0, 0, string, gTheme->textColor);
 }
 
+/* RetroAchievements notices, raised from the I/O thread (image check
+   result, PC link test). Rendered by the GUI thread below. */
+static char raNotice[2][96];
+/* volatile: written from the I/O thread and read by the GUI thread; the
+   hide-fill-show order below must reach memory in that order. */
+static volatile int raNoticeLines = 0;
+static clock_t raNoticeTimer = 0;
+
+void guiShowRANotice(const char *line1, const char *line2)
+{
+    /* Called from the I/O thread while the GUI thread may be drawing:
+       hide, fill, then show, so a half-copied line is never rendered. */
+    raNoticeLines = 0;
+    snprintf(raNotice[0], sizeof(raNotice[0]), "%s", line1 ? line1 : "");
+    snprintf(raNotice[1], sizeof(raNotice[1]), "%s", line2 ? line2 : "");
+    raNoticeTimer = 0;
+    raNoticeLines = (line2 != NULL && line2[0] != '\0') ? 2 : 1;
+}
+
+/* RA: drawn on every frame, regardless of the notifications setting.
+   Returns the y the ordinary notifications should continue from, so
+   the two never overlap. */
+static int guiRenderRANotices(int y, int yadd)
+{
+    int i;
+
+    if (raNoticeLines <= 0)
+        return y;
+
+    if (!raNoticeTimer) {
+        raNoticeTimer = clock() + 8000 * (CLOCKS_PER_SEC / 1000);
+        sfxPlay(SFX_MESSAGE);
+    }
+
+    for (i = 0; i < raNoticeLines; i++) {
+        guiRenderNotifications(raNotice[i], y);
+        y += yadd;
+    }
+
+    if (clock() >= raNoticeTimer) {
+        raNoticeLines = 0;
+        raNoticeTimer = 0;
+    }
+
+    return y;
+}
+
+void guiShowRANotices(void)
+{
+    guiRenderRANotices(10, 35);
+}
+
 static void guiShowNotifications(void)
 {
     char notification[128];
     char *col_pos;
     int y = 10;
     int yadd = 35;
+
+    /* Already drawn by guiShowRANotices() this frame; only move past
+       them, so the two kinds never overlap. */
+    y += raNoticeLines * yadd;
 
     if (showPartPopup || showThmPopup || showLngPopup || showCfgPopup) {
         if (!popupTimer) {
@@ -465,6 +521,7 @@ static int guiUpdater(int modified)
 
         diaGetInt(diaConfig, CFG_BDMMODE, &gBDMStartMode);
         diaSetVisible(diaConfig, BLOCKDEVICE_BUTTON, gBDMStartMode);
+        diaGetInt(diaConfig, CFG_PS1USBEXFAT, &gPs1UsbExfat);
     }
     return 0;
 }
@@ -478,8 +535,10 @@ int guiDeviceTypeToIoMode(int deviceType)
         return ETH_MODE;
     else if (deviceType == 2)
         return HDD_MODE;
-    else
+    else if (deviceType == 3)
         return APP_MODE;
+    else
+        return MMCE_MODE;
 }
 
 int guiIoModeToDeviceType(int ioMode)
@@ -497,6 +556,8 @@ int guiIoModeToDeviceType(int ioMode)
             return 2;
         case APP_MODE:
             return 3;
+        case MMCE_MODE:
+            return 4;
         default:
             return 0;
     }
@@ -505,7 +566,7 @@ int guiIoModeToDeviceType(int ioMode)
 void guiShowConfig()
 {
     // configure the enumerations
-    const char *deviceNames[] = {_l(_STR_BDM_GAMES), _l(_STR_NET_GAMES), _l(_STR_HDD_GAMES), _l(_STR_APPS), NULL};
+    const char *deviceNames[] = {_l(_STR_BDM_GAMES), _l(_STR_NET_GAMES), _l(_STR_HDD_GAMES), _l(_STR_APPS), _l(_STR_MMCE), NULL};
     const char *deviceModes[] = {_l(_STR_OFF), _l(_STR_MANUAL), _l(_STR_AUTO), NULL};
 
     diaSetEnum(diaConfig, CFG_DEFDEVICE, deviceNames);
@@ -535,6 +596,7 @@ void guiShowConfig()
     diaSetInt(diaConfig, CFG_DEFDEVICE, deviceModeIndex);
     diaSetInt(diaConfig, CFG_BDMMODE, gBDMStartMode);
     diaSetVisible(diaConfig, BLOCKDEVICE_BUTTON, gBDMStartMode);
+    diaSetInt(diaConfig, CFG_PS1USBEXFAT, gPs1UsbExfat);
     diaSetEnabled(diaConfig, CFG_HDDMODE, !gEnableBdmHDD);
     diaSetInt(diaConfig, CFG_HDDMODE, gHDDStartMode);
     diaSetInt(diaConfig, CFG_ETHMODE, gETHStartMode);
@@ -841,6 +903,44 @@ void guiShowNetConfig(void)
 
         applyConfig(-1, -1, 0);
     }
+}
+
+void guiShowMMCEConfig()
+{
+    int ret;
+    const char *deviceModes[] = {_l(_STR_OFF), _l(_STR_MANUAL), _l(_STR_AUTO), NULL};
+    const char *deviceSlots[] = {"0", "1", _l(_STR_AUTO), NULL};
+    const char *deviceIGRSlots[] = {"NONE", "0", "1", "BOTH", NULL};
+
+    diaSetEnum(diaMMCEConfig, CFG_MMCEMODE, deviceModes);
+    diaSetInt(diaMMCEConfig, CFG_MMCEMODE, gMMCEStartMode);
+
+    diaSetEnum(diaMMCEConfig, CFG_MMCESLOT, deviceSlots);
+    diaSetInt(diaMMCEConfig, CFG_MMCESLOT, gMMCESlot);
+
+    diaSetEnum(diaMMCEConfig, CFG_MMCEIGRSLOT, deviceIGRSlots);
+    diaSetInt(diaMMCEConfig, CFG_MMCEIGRSLOT, gMMCEIGRSlot);
+
+    diaSetString(diaMMCEConfig, CFG_MMCEPREFIX, gMMCEPrefix);
+
+#ifdef __DEBUG
+    diaSetInt(diaMMCEConfig, CFG_MMCEGAMEID, gMMCEEnableGameID);
+#endif
+
+    ret = diaExecuteDialog(diaMMCEConfig, -1, 1, NULL);
+    if (ret) {
+        diaGetInt(diaMMCEConfig, CFG_MMCEMODE, &gMMCEStartMode);
+        diaGetInt(diaMMCEConfig, CFG_MMCESLOT, &gMMCESlot);
+#ifdef __DEBUG
+        diaGetInt(diaMMCEConfig, CFG_MMCEGAMEID, &gMMCEEnableGameID);
+#endif
+        diaGetInt(diaMMCEConfig, CFG_MMCEIGRSLOT, &gMMCEIGRSlot);
+
+        diaGetString(diaMMCEConfig, CFG_MMCEPREFIX, gMMCEPrefix, sizeof(gMMCEPrefix));
+    }
+
+    applyConfig(-1, -1, 0);
+    menuReinitMainMenu();
 }
 
 void guiShowParentalLockConfig(void)
@@ -1579,6 +1679,11 @@ void guiMainLoop(void)
 
         // Render overlaying gui thingies :)
         guiDrawOverlays();
+
+        /* RA: our notices answer an explicit menu action, they are not
+           background chatter, so they must not depend on the
+           "Notifications" setting, which is off by default. */
+        guiShowRANotices();
 
         if (gEnableNotifications)
             guiShowNotifications();
