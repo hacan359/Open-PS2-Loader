@@ -128,7 +128,8 @@ IMPORT_BIN2C(smb_mcemu_irx);
 IMPORT_BIN2C(smb_cdvdman_irx);
 
 IMPORT_BIN2C(smbinit_irx);
-IMPORT_BIN2C(raudp_irx); // RA: telemetry gateway (bypass)
+IMPORT_BIN2C(raudp_irx);  // RA: telemetry gateway (bypass)
+IMPORT_BIN2C(rapops_irx); // RA: the same under POPS, MODULE_9.IRX
 
 IMPORT_BIN2C(smbman_irx);
 

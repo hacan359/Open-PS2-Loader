@@ -11,6 +11,9 @@
 #include "include/extern_irx.h"
 #include "include/cheatman.h"
 #include "include/sound.h"
+#include "include/ethsupport.h"
+#include "include/rawatch.h"
+#include "modules/network/common/rapops_cfg.h"
 #include "modules/iopcore/common/cdvd_config.h"
 
 #include <usbhdfsd-common.h>
@@ -315,10 +318,10 @@ static void bdmRenameGame(item_list_t *itemList, int id, char *newName)
     pDeviceData->ForceRefresh = 1;
 }
 
-/* Copies src to dst in one go; POPSTARTER.ELF is about 160 KB. */
+/* one read, one write: POPSTARTER.ELF is 164 KB */
 static int bdmCopyFile(const char *src, const char *dst)
 {
-    int in, out, size, ok = 0;
+    int in, size, ok = 0;
     void *buf;
 
     if ((in = open(src, O_RDONLY)) < 0)
@@ -326,7 +329,9 @@ static int bdmCopyFile(const char *src, const char *dst)
     size = getFileSize(in);
     buf = size > 0 ? malloc(size) : NULL;
     if (buf != NULL && read(in, buf, size) == size) {
-        if ((out = open(dst, O_WRONLY | O_CREAT | O_TRUNC)) >= 0) {
+        int out = open(dst, O_WRONLY | O_CREAT | O_TRUNC);
+
+        if (out >= 0) {
             ok = write(out, buf, size) == size;
             close(out);
         }
@@ -337,24 +342,192 @@ static int bdmCopyFile(const char *src, const char *dst)
     return ok ? 0 : -1;
 }
 
-/*
-  PS1: hand the console to POPStarter. It finds its device and the VCD
-  by string-parsing its own argv[0], and accepts only the bare "mass:"
-  form (RiptOPL's sysLaunchPopstarter, src/opl-nathan). The SDK loader
-  sets argv[0] to the path it loads, so we load XX.<name>.ELF by exactly
-  that path; mass: is unit 0 on the IOP.
-*/
-static void bdmLaunchVcd(item_list_t *itemList, bdm_device_data_t *pDeviceData, base_game_info_t *game)
+/* POPStarter loads POPS/MODULE_#.IRX without arguments, so the copy
+   carries the IP configuration, the serial and the watch list in its
+   rapops_cfg block.
+   TODO: a user's own MODULE_9.IRX gets overwritten. */
+static void bdmWriteRaPopsModule(const char *root, const char *serial)
+{
+    char path[128];
+    u8 ip[4], mask[4], gw[4];
+    struct rapops_cfg *cfg = NULL;
+    u8 *irx;
+    int i;
+
+    snprintf(path, sizeof(path), "%sPOPS/MODULE_9.IRX", root);
+
+    /* a copy left from an earlier launch would announce an old address */
+    unlink(path);
+
+    if (ethGetNetConfig(ip, mask, gw) < 0 || (ip[0] | ip[1] | ip[2] | ip[3]) == 0)
+        return;
+    if ((irx = malloc(size_rapops_irx)) == NULL)
+        return;
+    memcpy(irx, &rapops_irx, size_rapops_irx);
+
+    for (i = 0; i + (int)sizeof(*cfg) <= (int)size_rapops_irx; i += 4) {
+        if (memcmp(&irx[i], RAPOPS_MAGIC, 8) == 0) {
+            cfg = (struct rapops_cfg *)&irx[i];
+            break;
+        }
+    }
+
+    if (cfg != NULL) {
+        int fd, n;
+
+        /* three dotted quads of at most 15 characters fit in 64 bytes */
+        n = sprintf(cfg->ipcfg, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]) + 1;
+        n += sprintf(&cfg->ipcfg[n], "%u.%u.%u.%u", mask[0], mask[1], mask[2], mask[3]) + 1;
+        n += sprintf(&cfg->ipcfg[n], "%u.%u.%u.%u", gw[0], gw[1], gw[2], gw[3]) + 1;
+        cfg->ipcfg_len = n;
+        snprintf(cfg->game_id, sizeof(cfg->game_id), "%s", serial);
+        if (GetWatchCount() > 0 && GetWatchCount() <= RA_WATCH_MAX && GetNodeCount() <= RA_NODE_MAX) {
+            cfg->count = GetWatchCount();
+            cfg->bytes = GetWatchBytes();
+            cfg->node_count = GetNodeCount();
+            memcpy(cfg->list, GetWatchList(), cfg->count * sizeof(u32));
+            if (cfg->node_count > 0)
+                memcpy(cfg->nodes, GetNodeList(), cfg->node_count * sizeof(struct ra_node));
+        }
+
+        if ((fd = open(path, O_WRONLY | O_CREAT | O_TRUNC)) >= 0) {
+            int written = write(fd, irx, size_rapops_irx);
+
+            close(fd);
+            if (written != (int)size_rapops_irx)
+                unlink(path);
+            LOG("BDM: %s for %s, %d bytes\n", path, serial, written);
+        }
+    }
+    free(irx);
+}
+
+/* POPStarter reads the game's device with its own driver after it
+   resets the IOP: USB FAT32 with the one built in, every other block
+   device with the BDMAssault pair it finds on the memory card as
+   mc?:/POPSTARTER/usbd.irx and usbhdfsd.irx (RiptOPL docs/VCD.md, "BDMA
+   equip"). The pairs ship in POPS/ as usbd.irx.<variant> and
+   usbhdfsd.irx.<variant>. The variant for this device, NULL for the
+   built-in driver, "" for a device POPStarter cannot read. */
+static const char *bdmBdmaVariant(const bdm_device_data_t *pDeviceData)
+{
+    const char *drv = pDeviceData->bdmDriver;
+
+    /* OPL cannot tell FAT32 from exFAT on USB, and the usbexfat pair
+       on a FAT32 stick stalls POPS on its first video (Blade, 08.10),
+       so the user says which one the drive is. */
+    if (strcmp(drv, "usb") == 0)
+        return gPs1UsbExfat ? "usbexfat" : NULL;
+    if (strcmp(drv, "sdc") == 0)
+        return "mx4sio";
+    if (strcmp(drv, "ata") == 0)
+        return "ata";
+    if (strcmp(drv, "sd") == 0)
+        return "ilink";
+    return "";
+}
+
+#define BDMA_MARKER "RA_BDMA.TXT" /* which pair OPL put on the card; a pair without it is the user's */
+
+static const char *bdmPopstarterMcDir(int create)
+{
+    static char dir[24];
+    DIR *d;
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        snprintf(dir, sizeof(dir), "mc%d:/POPSTARTER", i);
+        if ((d = opendir(dir)) != NULL) {
+            closedir(d);
+            return dir;
+        }
+    }
+    if (!create)
+        return NULL;
+    snprintf(dir, sizeof(dir), "mc0:/POPSTARTER");
+    return mkdir(dir, 0777) == 0 ? dir : NULL;
+}
+
+/* Puts the pair for variant on the card, or takes OPL's own pair off
+   it for the built-in driver. 0 when POPStarter will find what it
+   needs, -1 with a message otherwise. */
+static int bdmEquipBdma(const char *root, const char *variant)
+{
+    static const char *const names[] = {"usbd.irx", "usbhdfsd.irx"};
+    const char *mcdir;
+    char src[128], dst[64], marker[64], have[16] = "";
+    int fd, i, n;
+
+    /* the built-in USB driver needs no card; without the folder there is
+       nothing of ours to take off either */
+    if ((mcdir = bdmPopstarterMcDir(variant != NULL)) == NULL) {
+        if (variant == NULL)
+            return 0;
+        guiMsgBox("No memory card for POPStarter's drivers", 0, NULL);
+        return -1;
+    }
+    snprintf(marker, sizeof(marker), "%s/%s", mcdir, BDMA_MARKER);
+    if ((fd = open(marker, O_RDONLY)) >= 0) {
+        n = read(fd, have, sizeof(have) - 1);
+        have[n > 0 ? n : 0] = '\0';
+        close(fd);
+    }
+
+    if (variant == NULL) {
+        if (have[0] == '\0')
+            return 0; /* nothing of ours on the card, whatever is there stays */
+        for (i = 0; i < 2; i++) {
+            snprintf(dst, sizeof(dst), "%s/%s", mcdir, names[i]);
+            unlink(dst);
+        }
+        unlink(marker);
+        LOG("BDM: POPStarter back on its own USB driver\n");
+        return 0;
+    }
+
+    if (strcmp(have, variant) == 0)
+        return 0;
+
+    for (i = 0; i < 2; i++) {
+        snprintf(src, sizeof(src), "%sPOPS/%s.%s", root, names[i], variant);
+        snprintf(dst, sizeof(dst), "%s/%s", mcdir, names[i]);
+        if (bdmCopyFile(src, dst) != 0) {
+            char msg[128];
+
+            snprintf(msg, sizeof(msg), "POPS/%s.%s is missing on this device", names[i], variant);
+            guiMsgBox(msg, 0, NULL);
+            unlink(marker);
+            return -1;
+        }
+    }
+    if ((fd = open(marker, O_WRONLY | O_CREAT | O_TRUNC)) >= 0) {
+        write(fd, variant, strlen(variant));
+        close(fd);
+    }
+    LOG("BDM: POPStarter driver pair %s on %s\n", variant, mcdir);
+
+    return 0;
+}
+
+/* POPStarter finds the device and the VCD by parsing its argv[0] and
+   takes only the bare "mass:" form. The SDK loader sets argv[0] to the
+   path it loads, so XX.<name>.ELF is loaded by that path. */
+static void bdmLaunchVcd(const item_list_t *itemList, const bdm_device_data_t *pDeviceData, const base_game_info_t *game)
 {
     char root[64], path[256], selector[256];
+    const char *variant;
     int fd;
 
-    if (strcmp(pDeviceData->bdmDriver, "usb") != 0 || pDeviceData->massDeviceIndex != 0) {
-        guiMsgBox("PS1 games start only from the first USB device for now", 0, NULL);
+    sbDeviceRoot(pDeviceData->bdmPrefix, root, sizeof(root));
+    variant = bdmBdmaVariant(pDeviceData);
+
+    /* TODO: the first device of its kind is "mass:" to POPStarter; a
+       second one has no selector */
+    if ((variant != NULL && variant[0] == '\0') || pDeviceData->massDeviceIndex != 0) {
+        guiMsgBox("POPStarter cannot read PS1 games from this device", 0, NULL);
         return;
     }
 
-    sbDeviceRoot(pDeviceData->bdmPrefix, root, sizeof(root));
     snprintf(path, sizeof(path), "%sPOPS/XX.%s.ELF", root, game->name);
 
     fd = open(path, O_RDONLY);
@@ -369,6 +542,12 @@ static void bdmLaunchVcd(item_list_t *itemList, bdm_device_data_t *pDeviceData, 
             return;
         }
     }
+
+    if (bdmEquipBdma(root, variant) != 0)
+        return;
+
+    sbLoadWatchList(pDeviceData->bdmPrefix, game->startup);
+    bdmWriteRaPopsModule(root, game->startup);
 
     snprintf(selector, sizeof(selector), "mass:/POPS/XX.%s.ELF", game->name);
     LOG("BDM: POPStarter %s\n", selector);

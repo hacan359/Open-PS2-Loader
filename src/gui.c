@@ -521,6 +521,7 @@ static int guiUpdater(int modified)
 
         diaGetInt(diaConfig, CFG_BDMMODE, &gBDMStartMode);
         diaSetVisible(diaConfig, BLOCKDEVICE_BUTTON, gBDMStartMode);
+        diaGetInt(diaConfig, CFG_PS1USBEXFAT, &gPs1UsbExfat);
     }
     return 0;
 }
@@ -595,6 +596,7 @@ void guiShowConfig()
     diaSetInt(diaConfig, CFG_DEFDEVICE, deviceModeIndex);
     diaSetInt(diaConfig, CFG_BDMMODE, gBDMStartMode);
     diaSetVisible(diaConfig, BLOCKDEVICE_BUTTON, gBDMStartMode);
+    diaSetInt(diaConfig, CFG_PS1USBEXFAT, gPs1UsbExfat);
     diaSetEnabled(diaConfig, CFG_HDDMODE, !gEnableBdmHDD);
     diaSetInt(diaConfig, CFG_HDDMODE, gHDDStartMode);
     diaSetInt(diaConfig, CFG_ETHMODE, gETHStartMode);

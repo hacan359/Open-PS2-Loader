@@ -127,6 +127,8 @@ extern int smbCacheSize;
 extern int gMMCESlot;
 extern int gMMCEIGRSlot;
 extern int gMMCEEnableGameID; //Send GameID on game launch
+/* POPStarter reads an exFAT USB device only with the BDMAssault usbexfat pair */
+extern int gPs1UsbExfat;
 extern int gEnableILK;
 extern int gEnableMX4SIO;
 extern int gEnableBdmHDD;

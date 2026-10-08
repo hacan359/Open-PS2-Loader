@@ -1013,6 +1013,26 @@ static void ra_heartbeat(void)
     ra_ctl_send(hb, n);
 }
 
+static int ra_start_thread(void (*entry)(void *), int priority)
+{
+    iop_thread_t thread;
+    int tid;
+
+    thread.attr = TH_C;
+    thread.option = 0;
+    thread.thread = entry;
+    thread.stacksize = 0x1000;
+    thread.priority = priority;
+
+    tid = CreateThread(&thread);
+    if (tid < 0)
+        return tid;
+
+    StartThread(tid, NULL);
+
+    return tid;
+}
+
 /* ---- Thread and module entry ------------------------------------------- */
 
 static void ra_thread(void *arg)
@@ -1058,16 +1078,13 @@ int _shutdown(void)
     return 0;
 }
 
-/* Arguments, built by ee_core (iopmgr.c). argv[1] is laid out by the
-   RA_ARG_* offsets in ra_snap.h, each field optional from the left.
-   argv[2] is the own IP in dotted form (followed by netmask and gateway,
-   which this module does not need). argv[0] is the module name, inserted
-   by the IOP loader. */
+/* Arguments, built by ee_core (iopmgr.c) or rapops under POPS. argv[1]
+   is laid out by the RA_ARG_* offsets in ra_snap.h, each field optional
+   from the left. argv[2] is the own IP in dotted form (followed by
+   netmask and gateway, which this module does not need). argv[0] is the
+   module name, inserted by the IOP loader. */
 int _start(int argc, char *argv[])
 {
-    iop_thread_t thread;
-    int tid;
-
     if (argc >= 2 && argv[1] != NULL) {
         int len;
 
@@ -1099,17 +1116,8 @@ int _start(int argc, char *argv[])
 
     RegisterLibraryEntries(&_exp_raudp);
 
-    thread.attr = TH_C;
-    thread.option = 0;
-    thread.thread = ra_thread;
-    thread.stacksize = 0x1000;
-    thread.priority = 0x68;
-
-    tid = CreateThread(&thread);
-    if (tid < 0)
+    if (ra_start_thread(ra_thread, 0x68) < 0)
         return MODULE_NO_RESIDENT_END;
-
-    StartThread(tid, NULL);
 
     return MODULE_RESIDENT_END;
 }

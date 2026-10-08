@@ -102,6 +102,7 @@ enum CONFIG_INDEX {
 #define CONFIG_OPL_MMCE_SLOT            "mmce_slot"
 #define CONFIG_OPL_MMCEIGR_SLOT         "mmceigr_slot"
 #define CONFIG_OPL_MMCE_GAMEID          "mmce_gameid"
+#define CONFIG_OPL_PS1_USB_EXFAT        "ps1_usb_exfat"
 #define CONFIG_OPL_ENABLE_ILINK         "enable_ilink"
 #define CONFIG_OPL_ENABLE_MX4SIO        "enable_mx4sio"
 #define CONFIG_OPL_ENABLE_BDMHDD        "enable_bdm_hdd"

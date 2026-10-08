@@ -228,6 +228,11 @@ struct UIItem diaConfig[] = {
     {UI_BUTTON, BLOCKDEVICE_BUTTON, 1, 1, _STR_HINT_BLOCK_DEVICES, 0, 0, {.label = {NULL, _STR_BLOCKDEVICE_SETTINGS}}},
     {UI_BREAK},
 
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {"PS1 USB drive is exFAT", -1}}},
+    {UI_SPACER},
+    {UI_BOOL, CFG_PS1USBEXFAT, 1, 1, -1, 0, 0, {.intvalue = {0, 0}}},
+    {UI_BREAK},
+
     {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_HDDMODE}}},
     {UI_SPACER},
     {UI_ENUM, CFG_HDDMODE, 1, 1, _STR_HDD_HINT, 0, 0, {.intvalue = {0, 0}}},

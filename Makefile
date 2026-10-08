@@ -90,6 +90,8 @@ IOP_OBJS =	iomanx.o filexio.o ps2fs.o usbd.o bdmevent.o \
 
 # RetroAchievements telemetry module, loaded in-game after SMBINIT
 IOP_OBJS += raudp.o
+# The same under POPS: written to POPS/ as MODULE_9.IRX at a PS1 launch
+IOP_OBJS += rapops.o
 
 EECORE_OBJS = ee_core.o ioprp.o util.o \
 		udnl.o imgdrv.o eesync.o \
@@ -344,6 +346,9 @@ clean:	download_lwNBD
 	$(MAKE) -C modules/debug/udptty-ingame clean
 	echo " -raudp"
 	$(MAKE) -C modules/network/raudp clean
+	echo " -rapops"
+	$(MAKE) -C modules/network/rapops clean
+	$(MAKE) -C modules/network/rapull clean
 	echo " -ps2link"
 	$(MAKE) -C modules/debug/ps2link clean
 	echo " -ds34usb"
@@ -671,6 +676,27 @@ modules/network/raudp/raudp.irx: $(RAUDP_DEPS) | modules/network/raudp
 
 $(EE_ASM_DIR)raudp.c: modules/network/raudp/raudp.irx | $(EE_ASM_DIR)
 	$(BIN2C) $< $@ raudp_irx
+
+# PS1 under POPS: the snapshot read from the IOP over the SIF
+RAPULL_DEPS := $(wildcard modules/network/rapull/*.c) $(wildcard modules/network/common/*.h) \
+               modules/network/rapull/imports.lst modules/network/rapull/Makefile
+
+modules/network/rapull/rapull.irx: $(RAPULL_DEPS) | modules/network/rapull
+	$(MAKE) -C modules/network/rapull rebuild
+
+# PS1 under POPS: carries DEV9, SMSUTILS, SMSTCPIP, SMAP, raudp and rapull
+RAPOPS_DEPS := $(wildcard modules/network/rapops/*.c) modules/network/rapops/blobs.S \
+               modules/network/common/rapops_cfg.h modules/network/common/ra_snap.h \
+               modules/network/rapops/imports.lst modules/network/rapops/Makefile \
+               modules/network/raudp/raudp.irx modules/network/SMSTCPIP/SMSTCPIP.irx \
+               modules/network/smap-ingame/smap.irx modules/network/SMSUTILS/SMSUTILS.irx \
+               modules/network/rapull/rapull.irx
+
+modules/network/rapops/rapops.irx: $(RAPOPS_DEPS) | modules/network/rapops
+	$(MAKE) -C modules/network/rapops rebuild
+
+$(EE_ASM_DIR)rapops.c: modules/network/rapops/rapops.irx | $(EE_ASM_DIR)
+	$(BIN2C) $< $@ rapops_irx
 
 $(EE_ASM_DIR)ingame_smstcpip.c: modules/network/SMSTCPIP/SMSTCPIP.irx | $(EE_ASM_DIR)
 	$(BIN2C) $< $@ $(*F)_irx
