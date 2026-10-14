@@ -694,3 +694,19 @@ gui_strings:
   string: Cheat Selection
 - label: HDD_HINT
   string: Only one HDD allowed, enabling locks APA or GPT.
+- label: MMCE
+  string: MMCE
+- label: MMCE_GAMES
+  string: MMCE Games
+- label: MMCEMODE
+  string: MMCE Start Mode
+- label: MMCE_PREFIX
+  string: MMCE Prefix Path
+- label: MMCE_SLOT
+  string: MMCE Slot
+- label: MMCEIGR_SLOT
+  string: IGR Bootcard Slot(s)
+- label: HINT_MMCEIGR_SLOT
+  string: On in-game reset the selected slot(s) switch to the boot card
+- label: MMCE_SETTINGS
+  string: MMCE Settings

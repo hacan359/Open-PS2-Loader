@@ -22,6 +22,8 @@ void ethDisplayErrorStatus(void);    // Displays the current error status (if an
 int ethGetNetConfig(u8 *ip_address, u8 *netmask, u8 *gateway);
 int ethApplyConfig(void);
 int ethGetDHCPStatus(void);
+int ethGetNetIFLinkStatus(void); // RA: is the cable in and the link up
+
 item_list_t *ethGetObject(int initOnly);
 
 #endif

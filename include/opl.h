@@ -119,10 +119,16 @@ extern int gBDMStartMode;
 extern int gHDDStartMode;
 extern int gETHStartMode;
 extern int gAPPStartMode;
+extern int gMMCEStartMode;
 extern int bdmCacheSize;
 extern int hddCacheSize;
 extern int smbCacheSize;
 
+extern int gMMCESlot;
+extern int gMMCEIGRSlot;
+extern int gMMCEEnableGameID; //Send GameID on game launch
+/* POPStarter reads an exFAT USB device only with the BDMAssault usbexfat pair */
+extern int gPs1UsbExfat;
 extern int gEnableILK;
 extern int gEnableMX4SIO;
 extern int gEnableBdmHDD;
@@ -150,7 +156,6 @@ extern char gDefaultBGMPath[128];
 extern int gXSensitivity;
 extern int gYSensitivity;
 
-extern int gCheatSource;
 extern int gGSMSource;
 extern int gPadEmuSource;
 
@@ -194,6 +199,7 @@ extern int gEnableWrite;
 // These prefixes are relative to the device's name (meaning that they do not include the device name).
 extern char gBDMPrefix[32];
 extern char gETHPrefix[32];
+extern char gMMCEPrefix[32];
 
 extern int gRememberLastPlayed;
 

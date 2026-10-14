@@ -31,9 +31,15 @@ enum UI_ITEMS {
     CFG_EXITTO,
     CFG_DEFDEVICE,
     CFG_BDMMODE,
+    CFG_PS1USBEXFAT,
     CFG_HDDMODE,
     CFG_ETHMODE,
     CFG_APPMODE,
+    CFG_MMCEMODE,
+    CFG_MMCEPREFIX,
+    CFG_MMCESLOT,
+    CFG_MMCEIGRSLOT,
+    CFG_MMCEGAMEID,
     CFG_BDMCACHE,
     CFG_HDDCACHE,
     CFG_SMBCACHE,
@@ -100,11 +106,6 @@ enum UI_ITEMS {
     NETCFG_ETHOPMODE,
     NETCFG_RECONNECT,
     NETCFG_OK,
-
-    CHTCFG_CHEATSOURCE,
-    CHTCFG_CHEATCFG,
-    CHTCFG_ENABLECHEAT,
-    CHTCFG_CHEATMODE,
 
     GSMCFG_GSMSOURCE,
     GSMCFG_GSCONFIG,
@@ -217,7 +218,6 @@ extern struct UIItem diaControllerConfig[];
 extern struct UIItem diaCompatConfig[];
 extern struct UIItem diaVMCConfig[];
 extern struct UIItem diaGSConfig[];
-extern struct UIItem diaCheatConfig[];
 
 extern struct UIItem diaConfig[];
 extern struct UIItem diaAbout[];
@@ -227,4 +227,6 @@ extern struct UIItem diaParentalLockConfig[];
 extern struct UIItem diaBlockDevicesConfig[];
 
 extern struct UIItem diaOSDConfig[];
+extern struct UIItem diaMMCEConfig[];
+
 #endif

@@ -18,6 +18,7 @@ enum INTERNAL_TEXTURE {
     HDD_ICON,
     ETH_ICON,
     APP_ICON,
+    MMCE_ICON,
     INDEX_0,
     INDEX_1,
     INDEX_2,
@@ -91,6 +92,7 @@ enum INTERNAL_TEXTURE {
     LOGO_PICTURE,
     CASE_OVERLAY,
     APPS_CASE_OVERLAY,
+    RA_MARK, /* RA: mark over the cover of a checked game */
 
     TEXTURES_COUNT
 };
