@@ -269,7 +269,8 @@ int SMAPSendPacket(const void *data, unsigned int length)
             : "at", "v0", "v1", "t0", "t1", "t2", "t3");
 
         BD_ptr->length = length;
-        BD_ptr->pointer = BD_data_ptr;
+        /* Descriptors use the TX buffer address, not the FIFO write offset. */
+        BD_ptr->pointer = BD_data_ptr + 0x1000;
         SMAP_REG8(SMAP_R_TXFIFO_FRAME_INC) = 0;
         BD_ptr->ctrl_stat = SMAP_BD_TX_READY | SMAP_BD_TX_GENFCS | SMAP_BD_TX_GENPAD;
         SmapDriverData.TxBDIndex++;
