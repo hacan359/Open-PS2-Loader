@@ -62,12 +62,20 @@ static StmCallback_t Stm0Callback = NULL;
 static iop_sys_clock_t gCallbackSysClock;
 
 // buffers
-u8 cdvdman_buf[CDVDMAN_BUF_SECTORS * 2048];
+u8 cdvdman_buf[CDVDMAN_BUF_SECTORS * 2048] __attribute__((aligned(4)));
 
 #define CDVDMAN_MODULE_VERSION 0x225
 static int cdvdman_debug_print_flag = 0;
 
 unsigned char sync_flag;
+struct cdvdman_read_completion
+{
+    volatile int done;
+    volatile int ready;
+    volatile int error;
+};
+static struct cdvdman_read_completion *read_completion;
+static struct cdvdman_read_completion search_completion;
 unsigned char cdvdman_cdinited = 0;
 static unsigned int ReadPos = 0; /* Current buffer offset in 2048-byte sectors. */
 
@@ -260,6 +268,7 @@ static int cdvdman_read_sectors(u32 lsn, unsigned int sectors, void *buf)
     unsigned int remaining;
     void *ptr;
     int endOfMedia = 0;
+    int error = SCECdErNO;
 
     DPRINTF("cdvdman_read lsn=%lu sectors=%u buf=%p\n", lsn, sectors, buf);
 
@@ -269,7 +278,7 @@ static int cdvdman_read_sectors(u32 lsn, unsigned int sectors, void *buf)
         if (lsn >= mediaLsnCount) {
             DPRINTF("cdvdman_read eom lsn=%d sectors=%d leftsectors=%d MaxLsn=%d \n", lsn, sectors, mediaLsnCount - lsn, mediaLsnCount);
             cdvdman_stat.err = SCECdErIPI;
-            return 1;
+            return SCECdErIPI;
         }
 
         // As per PS2 mecha code continue to read what you can and then signal end of media error.
@@ -283,8 +292,10 @@ static int cdvdman_read_sectors(u32 lsn, unsigned int sectors, void *buf)
 
     if (probed == 0) { // Probe for ZSO before first read
         // check for ZSO
-        if (!ProbeZSO(buf)) // we need to pass the buffer so we have somewhere to read the first sector to identify ZSO before allocating any extra RAM
-            return 1;
+        if (!ProbeZSO(buf)) { // Probe uses the caller's buffer before allocating ZSO memory.
+            cdvdman_stat.err = SCECdErREAD;
+            return SCECdErREAD;
+        }
     }
 
     cdvdman_stat.err = SCECdErNO;
@@ -307,8 +318,9 @@ static int cdvdman_read_sectors(u32 lsn, unsigned int sectors, void *buf)
             SetAlarm(&TargetTime, &cdvdemu_read_end_cb, NULL);
         }
 
-        cdvdman_stat.err = DeviceReadSectorsPtr(lsn, ptr, SectorsToRead);
-        if (cdvdman_stat.err != SCECdErNO) {
+        error = DeviceReadSectorsPtr(lsn, ptr, SectorsToRead);
+        cdvdman_stat.err = error;
+        if (error != SCECdErNO) {
             if (cdvdman_settings.common.flags & IOPCORE_COMPAT_ACCU_READS)
                 CancelAlarm(&cdvdemu_read_end_cb, NULL);
             break;
@@ -346,14 +358,16 @@ static int cdvdman_read_sectors(u32 lsn, unsigned int sectors, void *buf)
 
     // If we had a read that went past the end of media, after reading what we can, set the end of media error.
     if (endOfMedia) {
+        error = SCECdErEOM;
         cdvdman_stat.err = SCECdErEOM;
     }
 
-    return (cdvdman_stat.err == SCECdErNO ? 0 : 1);
+    return error;
 }
 
 static int cdvdman_read(u32 lsn, u32 sectors, u16 sector_size, void *buf)
 {
+    int error = SCECdErNO;
     cdvdman_stat.status = SCECdStatRead;
     buf = (void *)PHYSADDR(buf);
 
@@ -380,7 +394,9 @@ static int cdvdman_read(u32 lsn, u32 sectors, u16 sector_size, void *buf)
             if (sector_size != 2048)
                 nsectors = 1;
 
-            cdvdman_read_sectors(rpos, nsectors, cdvdman_buf);
+            int result = cdvdman_read_sectors(rpos, nsectors, cdvdman_buf);
+            if (error == SCECdErNO)
+                error = result;
 
             rpos += nsectors;
             sectors -= nsectors;
@@ -413,13 +429,13 @@ static int cdvdman_read(u32 lsn, u32 sectors, u16 sector_size, void *buf)
         }
         SignalSema(cdvdman_searchfilesema);
     } else
-        cdvdman_read_sectors(lsn, sectors, buf);
+        error = cdvdman_read_sectors(lsn, sectors, buf);
 
     ReadPos = 0; /* Reset the buffer offset indicator. */
 
     cdvdman_stat.status = SCECdStatPause;
 
-    return 1;
+    return error;
 }
 
 //-------------------------------------------------------------------------
@@ -446,7 +462,7 @@ static int cdvdman_common_lock(int IntrContext)
     return 1;
 }
 
-int cdvdman_AsyncRead(u32 lsn, u32 sectors, u16 sector_size, void *buf)
+static int cdvdman_queue_read(u32 lsn, u32 sectors, u16 sector_size, void *buf, struct cdvdman_read_completion *completion)
 {
     int IsIntrContext, OldState;
 
@@ -464,6 +480,7 @@ int cdvdman_AsyncRead(u32 lsn, u32 sectors, u16 sector_size, void *buf)
     cdvdman_stat.cdread_sectors = sectors;
     cdvdman_stat.sector_size = sector_size;
     cdvdman_stat.cdread_buf = buf;
+    read_completion = completion;
 
     CpuResumeIntr(OldState);
 
@@ -473,6 +490,28 @@ int cdvdman_AsyncRead(u32 lsn, u32 sectors, u16 sector_size, void *buf)
         SignalSema(cdrom_rthread_sema);
 
     return 1;
+}
+
+int cdvdman_AsyncRead(u32 lsn, u32 sectors, u16 sector_size, void *buf)
+{
+    return cdvdman_queue_read(lsn, sectors, sector_size, buf, NULL);
+}
+
+/* The caller retains the scratch semaphore until completion, serializing
+   both this completion record and the directory sector buffer. */
+int cdvdman_SearchRead(u32 lsn)
+{
+    search_completion.done = 0;
+    search_completion.ready = 0;
+    search_completion.error = SCECdErNO;
+
+    if (!cdvdman_queue_read(lsn, 1, 2048, cdvdman_buf, &search_completion))
+        return 0;
+
+    while (!search_completion.done)
+        DelayThread(1000);
+
+    return search_completion.error == SCECdErNO ? 1 : -1;
 }
 
 int cdvdman_SyncRead(u32 lsn, u32 sectors, u16 sector_size, void *buf)
@@ -716,22 +755,48 @@ static unsigned int event_alarm_cb(void *args)
    within the interrupt handler, before the user callback is run. */
 static void cdvdman_signal_read_end(void)
 {
+    int OldState;
+
+    CpuSuspendIntr(&OldState);
+    if (read_completion != NULL && read_completion->ready) {
+        read_completion->done = 1;
+        read_completion = NULL;
+    }
     sync_flag = 0;
     SetEventFlag(cdvdman_stat.intr_ef, 9);
+    CpuResumeIntr(OldState);
 }
 
 static void cdvdman_signal_read_end_intr(void)
 {
+    if (read_completion != NULL && read_completion->ready) {
+        read_completion->done = 1;
+        read_completion = NULL;
+    }
     sync_flag = 0;
     iSetEventFlag(cdvdman_stat.intr_ef, 9);
+}
+
+static void cdvdman_complete_read(struct cdvdman_read_completion *completion, int error)
+{
+    if (completion != NULL) {
+        completion->error = error;
+        /* The public release path publishes done, including delayed alarms. */
+        completion->ready = 1;
+    }
 }
 
 static void cdvdman_cdread_Thread(void *args)
 {
     while (1) {
-        WaitSema(cdrom_rthread_sema);
+        struct cdvdman_read_completion *completion;
 
-        cdvdman_read(cdvdman_stat.cdread_lba, cdvdman_stat.cdread_sectors, cdvdman_stat.sector_size, cdvdman_stat.cdread_buf);
+        WaitSema(cdrom_rthread_sema);
+        completion = read_completion;
+
+        int error = cdvdman_read(cdvdman_stat.cdread_lba, cdvdman_stat.cdread_sectors, cdvdman_stat.sector_size, cdvdman_stat.cdread_buf);
+
+        cdvdman_complete_read(completion, error);
 
         /* This streaming callback is not compatible with the original SONY stream channel 0 (IOP) callback's design.
        The original is run from the interrupt handler, but we want it to run

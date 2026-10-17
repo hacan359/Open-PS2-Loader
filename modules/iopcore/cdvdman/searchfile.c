@@ -99,9 +99,11 @@ lbl_startlocate:
     while (tocLength > 0) {
         {
             unsigned int retries = 0;
-            while (sceCdRead(tocLBA, 1, cdvdman_buf, NULL) == 0) {
+            int result;
+
+            while ((result = cdvdman_SearchRead(tocLBA)) == 0) {
                 if (++retries >= 1000) {
-                    printf("LAB directory retry exhausted lsn=%u\n", tocLBA);
+                    DPRINTF("directory read admission exhausted lsn=%u\n", tocLBA);
                     return NULL;
                 }
                 // Release the shared scratch buffer lock so unaligned reads can finish.
@@ -109,9 +111,8 @@ lbl_startlocate:
                 DelayThread(1000);
                 WaitSema(cdvdman_searchfilesema);
             }
-            sceCdSync(0);
-            if (retries)
-                printf("LAB directory retry accepted lsn=%u retries=%u\n", tocLBA, retries);
+            if (result < 0)
+                return NULL;
         }
         DPRINTF("cdvdman_locatefile tocLBA read done\n");
 
