@@ -18,6 +18,8 @@
 *.patch
 *.rej
 *.s
+# a source, not generated; *.s matches it where case is ignored
+!modules/network/rapops/blobs.S
 *.zip
 *.ZIP
 *.a

@@ -21,6 +21,11 @@
 
 int Install_PadOpen_Hook(u32 mem_start, u32 mem_end, int mode);
 void Install_IGR(void);
+/* RA under Mode 6: the VBLANK tick without any of the IGR. */
+void Install_RA_Vblank(void);
+/* RA: a reset asked for over the network. Takes the same road as the
+   Start+Select combo, whether or not the game's pad library is hooked. */
+void IGR_RequestReset(void);
 void Remove_Padhook(void);
 void Reset_Padhook(void);
 void IGR_Exit(s32 exit_code);
