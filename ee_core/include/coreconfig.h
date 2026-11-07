@@ -60,6 +60,9 @@ struct EECoreConfig_t
     int raNodeCount;
     /* The snapshot buffer, 64-byte aligned, in the same block. */
     void *raSnapBuf;
+    /* The PC client's IP from the network settings, first octet on top;
+       zero when the PC is found by broadcast only. */
+    u32 raPcIp;
 
     void *eeloadCopy;
     void *initUserMemory;

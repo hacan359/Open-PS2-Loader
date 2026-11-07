@@ -31,6 +31,9 @@
   records the sender of every incoming IP packet from the local subnet;
   etharp_lookup_mac() (an export added to SMSTCPIP) reads it out. From
   then on every telemetry frame is built by hand.
+  When the network settings name the PC client, the request also goes
+  to that address, and frames to a PC outside the own subnet carry the
+  gateway's MAC, read from the same table.
   Nothing is stored between runs: the IOP is reset on every game launch,
   so a stale address cannot survive. Until the PC answers, telemetry
   stays silent and the query repeats, every second at first and then
@@ -69,6 +72,9 @@ extern struct irx_export_table _exp_raudp;
    gives SMAP). The PC's IP and MAC come from discovery. Own MAC is read
    from the controller registers. All IPs are in network byte order. */
 static u32 ra_src_ip = 0;
+static u32 ra_mask = 0;  /* own netmask; 0 when not given */
+static u32 ra_gw = 0;    /* own gateway; 0 when not given */
+static u32 ra_pc_ip = 0; /* the PC client from the settings; 0 when not set */
 static u32 ra_dst_ip = 0;
 static u8 ra_dst_mac[6];
 
@@ -714,7 +720,18 @@ static int ra_snap_pending(void)
 /* Time spent in discovery. Subtracted from the start-up hold-off. */
 static u32 ra_disc_us = 0;
 
-/* Broadcasts "RAP1 <own-ip> <port>" and waits for "RAO1".
+/* Fills the MAC that frames to ip carry: the PC's own on the local
+   subnet, the gateway's otherwise. Returns 0 while the stack does not
+   know it. */
+static int ra_next_hop_mac(u32 ip, u8 *mac)
+{
+    if (ra_mask != 0 && ra_gw != 0 && (ip & ra_mask) != (ra_src_ip & ra_mask))
+        return etharp_lookup_mac(ra_gw, mac);
+    return etharp_lookup_mac(ip, mac);
+}
+
+/* Broadcasts "RAP1 <own-ip> <port>" and waits for "RAO1". The same
+   request also goes to the PC client from the settings, when set.
 
    Own address is in the text because the PC client may run inside a
    container behind NAT, which rewrites the source address; the client
@@ -726,7 +743,7 @@ static u32 ra_disc_us = 0;
    the query repeats, first every second, then every 30 seconds. */
 static int ra_discover(void)
 {
-    struct sockaddr_in me, to, from;
+    struct sockaddr_in me, to, pc, from;
     socklen_t fromlen;
     char req[48], rx[64];
     int s, on = 1, len, tries = 0, w, got;
@@ -748,6 +765,9 @@ static int ra_discover(void)
     to.sin_family = AF_INET;
     to.sin_port = htons(RA_DST_PORT);
     to.sin_addr.s_addr = INADDR_BROADCAST;
+    pc.sin_family = AF_INET;
+    pc.sin_port = htons(RA_DST_PORT);
+    pc.sin_addr.s_addr = ra_pc_ip;
 
     req[0] = 'R';
     req[1] = 'A';
@@ -762,6 +782,8 @@ static int ra_discover(void)
 
     for (;;) {
         lwip_sendto(s, req, len, 0, (struct sockaddr *)&to, sizeof(to));
+        if (ra_pc_ip != 0)
+            lwip_sendto(s, req, len, 0, (struct sockaddr *)&pc, sizeof(pc));
 
         for (w = 0; w < RA_DISC_POLLS; w++) {
             DelayThread(RA_DISC_POLL_US);
@@ -777,10 +799,11 @@ static int ra_discover(void)
                 u32 ip = from.sin_addr.s_addr;
 
                 /* The reply came through the stack, so the stack has
-                   already recorded the sender's IP/MAC pair. An IP
-                   without a MAC is useless: a frame with no destination
-                   would vanish silently. Keep asking in that case. */
-                if (ip != 0 && ip != INADDR_BROADCAST && etharp_lookup_mac(ip, ra_dst_mac)) {
+                   already recorded the sender's IP/MAC pair, or the
+                   gateway's for a PC behind a router. An IP without a
+                   MAC is useless: a frame with no destination would
+                   vanish silently. Keep asking in that case. */
+                if (ip != 0 && ip != INADDR_BROADCAST && ra_next_hop_mac(ip, ra_dst_mac)) {
                     ra_dst_ip = ip;
                     ra_sock = s; /* kept open: the PC's unlock notices arrive here */
                     return 1;
@@ -1080,9 +1103,9 @@ int _shutdown(void)
 
 /* Arguments, built by ee_core (iopmgr.c) or rapops under POPS. argv[1]
    is laid out by the RA_ARG_* offsets in ra_snap.h, each field optional
-   from the left. argv[2] is the own IP in dotted form (followed by
-   netmask and gateway, which this module does not need). argv[0] is the
-   module name, inserted by the IOP loader. */
+   from the left. argv[2] to argv[4] are the own IP, netmask and gateway
+   in dotted form. argv[0] is the module name, inserted by the IOP
+   loader. */
 int _start(int argc, char *argv[])
 {
     if (argc >= 2 && argv[1] != NULL) {
@@ -1097,6 +1120,8 @@ int _start(int argc, char *argv[])
             ra_ee_event = ra_hex_at(argv[1], RA_ARG_EVENT, 8);
         if (len >= RA_ARG_RX + 1 && argv[1][RA_ARG_RX - 1] == ',')
             ra_rx_in_game = argv[1][RA_ARG_RX] != '0';
+        if (len >= RA_ARG_PC + 8 && argv[1][RA_ARG_PC - 1] == ',')
+            ra_pc_ip = htonl(ra_hex_at(argv[1], RA_ARG_PC, 8));
         if (len >= RA_ARG_ID + 1 && argv[1][RA_ARG_ID - 1] == ',') {
             int i;
 
@@ -1108,6 +1133,12 @@ int _start(int argc, char *argv[])
 
     if (argc >= 3 && argv[2] != NULL)
         ra_src_ip = inet_addr(argv[2]);
+    if (argc >= 5 && argv[3] != NULL && argv[4] != NULL) {
+        ra_mask = inet_addr(argv[3]);
+        ra_gw = inet_addr(argv[4]);
+    }
+    if (ra_pc_ip == INADDR_BROADCAST)
+        ra_pc_ip = 0;
 
     /* Without an own address there is nothing to put in the discovery
        request or the IP header. Staying silent beats sending garbage. */

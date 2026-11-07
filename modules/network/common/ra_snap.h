@@ -90,13 +90,16 @@ struct ra_event
      RA_ARG_EVENT  eight hex digits, the event buffer in EE RAM
      RA_ARG_RX     '1' or '0', whether raudp may read from the network
                    while the game runs
+     RA_ARG_PC     eight hex digits, the PC client's IP with the first
+                   octet on top; zero: find the PC by broadcast only
      RA_ARG_ID     the game's serial, up to RA_ARG_ID_MAX characters
-   argv[2] is SMAP's ipconfig string. Both sides build and parse the
-   argument by these offsets. */
+   argv[2] to argv[4] are SMAP's ipconfig strings: own IP, netmask,
+   gateway. Both sides build and parse the argument by these offsets. */
 #define RA_ARG_SNAP   0
 #define RA_ARG_EVENT  9
 #define RA_ARG_RX     18
-#define RA_ARG_ID     20
+#define RA_ARG_PC     20
+#define RA_ARG_ID     29
 #define RA_ARG_ID_MAX 15
 #define RA_ARG_MAX    (RA_ARG_ID + RA_ARG_ID_MAX) /* characters before the terminator */
 

@@ -120,6 +120,8 @@ int _start(int argc, char *argv[])
     hex32(&args[RA_ARG_EVENT], 0);
     args[RA_ARG_RX - 1] = ',';
     args[RA_ARG_RX] = '1';
+    args[RA_ARG_PC - 1] = ',';
+    hex32(&args[RA_ARG_PC], g_cfg.pc_ip);
     args[RA_ARG_ID - 1] = ',';
     for (n = 0; n < RA_ARG_ID_MAX && g_cfg.game_id[n] != '\0'; n++)
         args[RA_ARG_ID + n] = g_cfg.game_id[n];

@@ -12,6 +12,7 @@
 #include "include/sound.h"
 #include "include/ethsupport.h"
 #include "include/rawatch.h"
+#include "include/ranet.h"
 #include "modules/network/common/rapops_cfg.h"
 #include "modules/iopcore/common/cdvd_config.h"
 
@@ -380,6 +381,7 @@ static void bdmWriteRaPopsModule(const char *root, const char *serial)
         n += sprintf(&cfg->ipcfg[n], "%u.%u.%u.%u", gw[0], gw[1], gw[2], gw[3]) + 1;
         cfg->ipcfg_len = n;
         snprintf(cfg->game_id, sizeof(cfg->game_id), "%s", serial);
+        cfg->pc_ip = raNetPCAddr();
         if (GetWatchCount() > 0 && GetWatchCount() <= RA_WATCH_MAX && GetNodeCount() <= RA_NODE_MAX) {
             cfg->count = GetWatchCount();
             cfg->bytes = GetWatchBytes();

@@ -211,7 +211,7 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
 
         if (snap != NULL) {
             /* argv[1] laid out by the RA_ARG_* offsets in ra_snap.h,
-               argv[2] SMAP's ipconfig strings. raudp finds the PC
+               then SMAP's ipconfig strings. raudp finds the PC
                itself. */
             char args[RA_ARG_MAX + 1 + IPCONFIG_MAX_LEN];
             int k, n;
@@ -228,6 +228,9 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
                for ever with either. Sending is unaffected and stays on. */
             args[RA_ARG_RX - 1] = ',';
             args[RA_ARG_RX] = config->GameMode == ETH_MODE ? '0' : '1';
+
+            args[RA_ARG_PC - 1] = ',';
+            ra_hex32(config->raPcIp, &args[RA_ARG_PC]);
 
             args[RA_ARG_ID - 1] = ',';
             for (n = 0; n < RA_ARG_ID_MAX && config->GameID[n] != '\0'; n++)

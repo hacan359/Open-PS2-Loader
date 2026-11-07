@@ -858,6 +858,7 @@ void guiShowNetConfig(void)
         diaSetInt(diaNetConfig, NETCFG_PS2_GATEWAY_0 + i, ps2_gateway[i]);
         diaSetInt(diaNetConfig, NETCFG_PS2_DNS_0 + i, ps2_dns[i]);
         diaSetInt(diaNetConfig, NETCFG_SHARE_IP_ADDR_0 + i, pc_ip[i]);
+        diaSetInt(diaNetConfig, NETCFG_RA_PC_IP_0 + i, ra_pc_ip[i]);
     }
 
     for (i = 0; i < 3; ++i)
@@ -894,6 +895,7 @@ void guiShowNetConfig(void)
             diaGetInt(diaNetConfig, NETCFG_PS2_GATEWAY_0 + i, &ps2_gateway[i]);
             diaGetInt(diaNetConfig, NETCFG_PS2_DNS_0 + i, &ps2_dns[i]);
             diaGetInt(diaNetConfig, NETCFG_SHARE_IP_ADDR_0 + i, &pc_ip[i]);
+            diaGetInt(diaNetConfig, NETCFG_RA_PC_IP_0 + i, &ra_pc_ip[i]);
         }
         diaGetInt(diaNetConfig, NETCFG_ETHOPMODE, &gETHOpMode);
 

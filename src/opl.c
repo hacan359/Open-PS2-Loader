@@ -132,6 +132,7 @@ int ps2_dns[4];
 int gETHOpMode; // See ETH_OP_MODES.
 int gPCShareAddressIsNetBIOS;
 int pc_ip[4];
+int ra_pc_ip[4];
 int gPCPort;
 char gPCShareNBAddress[17];
 char gPCShareName[32];
@@ -1039,6 +1040,9 @@ static void _loadConfig()
                 sscanf(temp, "%d.%d.%d.%d", &ps2_dns[0], &ps2_dns[1], &ps2_dns[2], &ps2_dns[3]);
 
             configGetStrCopy(configNet, CONFIG_NET_NBD_DEFAULT_EXPORT, gExportName, sizeof(gExportName));
+
+            if (configGetStr(configNet, CONFIG_NET_RA_PC_IP, &temp))
+                sscanf(temp, "%d.%d.%d.%d", &ra_pc_ip[0], &ra_pc_ip[1], &ra_pc_ip[2], &ra_pc_ip[3]);
         }
     }
 
@@ -1206,6 +1210,8 @@ static void _saveConfig()
         configSetStr(configNet, CONFIG_NET_SMB_NB_ADDR, gPCShareNBAddress);
         snprintf(temp, sizeof(temp), "%d.%d.%d.%d", pc_ip[0], pc_ip[1], pc_ip[2], pc_ip[3]);
         configSetStr(configNet, CONFIG_NET_SMB_IP_ADDR, temp);
+        snprintf(temp, sizeof(temp), "%d.%d.%d.%d", ra_pc_ip[0], ra_pc_ip[1], ra_pc_ip[2], ra_pc_ip[3]);
+        configSetStr(configNet, CONFIG_NET_RA_PC_IP, temp);
         configSetInt(configNet, CONFIG_NET_SMB_PORT, gPCPort);
         configSetStr(configNet, CONFIG_NET_SMB_SHARE, gPCShareName);
         configSetStr(configNet, CONFIG_NET_SMB_USER, gPCUserName);
@@ -1772,6 +1778,10 @@ static void setDefaults(void)
     pc_ip[1] = 168;
     pc_ip[2] = 0;
     pc_ip[3] = 2;
+    ra_pc_ip[0] = 0;
+    ra_pc_ip[1] = 0;
+    ra_pc_ip[2] = 0;
+    ra_pc_ip[3] = 0;
     ps2_dns[0] = 192;
     ps2_dns[1] = 168;
     ps2_dns[2] = 0;

@@ -130,6 +130,7 @@ enum CONFIG_INDEX {
 #define CONFIG_NET_SMB_PASSW          "smb_pass"
 #define CONFIG_NET_SMB_PORT           "smb_port"
 #define CONFIG_NET_NBD_DEFAULT_EXPORT "nbd_default_export"
+#define CONFIG_NET_RA_PC_IP           "ra_pc_ip"
 
 #define CONFIG_KEY_NAME_LEN  32
 #define CONFIG_KEY_VALUE_LEN 256

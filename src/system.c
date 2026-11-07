@@ -28,6 +28,7 @@
 #include <osd_config.h>
 #include "include/pggsm.h"
 #include "include/xparam.h"
+#include "include/ranet.h"
 
 #ifdef PADEMU
 #include <libds34bt.h>
@@ -987,6 +988,7 @@ void sysLaunchLoaderElf(const char *filename, const char *mode_str, int size_cdv
     config->raNodeList = GetWatchBlockNodes();
     config->raNodeCount = GetNodeCount();
     config->raSnapBuf = GetWatchBlockSnap();
+    config->raPcIp = raNetPCAddr();
 
     /* The last point where the list is still ours: from here it goes
        into ee_core with no feedback. A zero here means the game runs

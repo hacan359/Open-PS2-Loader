@@ -21,8 +21,13 @@ int raAskPC(const char *hash, const char *serial, const char *savepath,
    launch without a list is left alone. See src/ranet.c. */
 void raLaunchNetworkUp(void);
 
-/* Broadcasts a discovery request and reports the outcome as two lines
-   of text for the notice popup. Returns 1 when a PC client answered. */
+/* Sends a discovery request to the broadcast and to the RA client IP
+   when it is set, and reports the outcome as two lines of text for the
+   notice popup. Returns 1 when a PC client answered. */
 int raNetTestLink(char *line1, int sz1, char *line2, int sz2);
+
+/* The RA client IP from the network settings as one word, first octet
+   on top; 0 when it is not set. */
+u32 raNetPCAddr(void);
 
 #endif

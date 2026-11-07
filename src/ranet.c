@@ -10,8 +10,9 @@
   The bypass and hand-built frames belong to the in-game side; nothing
   of that kind is needed here.
 
-  The request is a broadcast: no PC address is stored anywhere, and
-  whoever listens answers.
+  The request is a broadcast, and whoever listens answers. When the
+  network settings name the PC client (ra_pc_ip), the same request also
+  goes there directly.
 
   Protocol, plain text:
     console -> "RAQ1 <hash32> <serial> <own-ip> <own-port>"
@@ -121,8 +122,10 @@ static unsigned char g_wl[RA_MAX_BYTES];
 
 /* Waits for a reply, resending the request. Returns the length or -1.
    The socket is non-blocking; SO_RCVTIMEO is not to be trusted on this
-   stack. */
-static int ask(int sock, struct sockaddr_in *to, const char *req, char *out, int outmax)
+   stack. With several targets the attempts take turns; the one that
+   answers moves to to[0] and *nto drops to 1, so later requests are not
+   answered twice. */
+static int ask(int sock, struct sockaddr_in *to, int *nto, const char *req, char *out, int outmax)
 {
     int t;
 
@@ -135,14 +138,14 @@ static int ask(int sock, struct sockaddr_in *to, const char *req, char *out, int
     for (t = 0; t < RA_TRY; t++) {
         struct sockaddr_in from;
         socklen_t fromlen = sizeof(from);
-        int w;
+        int w, k = t % *nto;
 
         /* Drop replies to earlier retransmits: a late one would pass for
            the answer to this request. */
         while (recvfrom(sock, out, asklen, RA_MSG_DONTWAIT, (struct sockaddr *)&from, &fromlen) > 0)
             fromlen = sizeof(from);
 
-        sendto(sock, req, strlen(req), 0, (struct sockaddr *)to, sizeof(*to));
+        sendto(sock, req, strlen(req), 0, (struct sockaddr *)&to[k], sizeof(to[k]));
 
         /* The reply may take a moment, so poll several times before
            resending. */
@@ -151,6 +154,10 @@ static int ask(int sock, struct sockaddr_in *to, const char *req, char *out, int
 
             if (got > 0) {
                 out[got] = '\0';
+                if (*nto > 1) {
+                    to[0] = to[k];
+                    *nto = 1;
+                }
                 return got;
             }
 
@@ -285,22 +292,41 @@ void raLaunchNetworkUp(void)
     }
 }
 
-static void broadcast_target(struct sockaddr_in *to)
+u32 raNetPCAddr(void)
 {
-    memset(to, 0, sizeof(*to));
-    to->sin_family = AF_INET;
-    to->sin_port = htons(RA_PORT);
-    to->sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    return ((u32)ra_pc_ip[0] << 24) | ((u32)ra_pc_ip[1] << 16) | ((u32)ra_pc_ip[2] << 8) | (u32)ra_pc_ip[3];
+}
+
+/* Fills the places a request goes: the broadcast, and the RA client IP
+   from the network settings when it is set. Returns how many. */
+static int pc_targets(struct sockaddr_in to[2])
+{
+    u32 pc = raNetPCAddr();
+    int n = 0;
+
+    if (pc != 0) {
+        memset(&to[n], 0, sizeof(to[n]));
+        to[n].sin_family = AF_INET;
+        to[n].sin_port = htons(RA_PORT);
+        to[n].sin_addr.s_addr = htonl(pc);
+        n++;
+    }
+
+    memset(&to[n], 0, sizeof(to[n]));
+    to[n].sin_family = AF_INET;
+    to[n].sin_port = htons(RA_PORT);
+    to[n].sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    return n + 1;
 }
 
 int raAskPC(const char *hash, const char *serial, const char *savepath,
             char *info, int infosz, char *info2, int info2sz)
 {
-    struct sockaddr_in to;
+    struct sockaddr_in to[2];
     char req[80];
     char myaddr[32];
     u8 ip[4];
-    int sock, got;
+    int sock, got, nto;
     int total = 0, chunks = 0, received = 0, i;
 
     if (info != NULL && infosz > 0)
@@ -312,12 +338,12 @@ int raAskPC(const char *hash, const char *serial, const char *savepath,
     if (sock < 0)
         return -1;
 
-    broadcast_target(&to);
+    nto = pc_targets(to);
 
     snprintf(req, sizeof(req), "RAQ1 %s %s%s", hash, serial, myaddr);
     LOG("RA: asking the PC about %s\n", hash);
 
-    got = ask(sock, &to, req, g_rx, sizeof(g_rx));
+    got = ask(sock, to, &nto, req, g_rx, sizeof(g_rx));
     if (got <= 0) {
         LOG("RA: no reply from the PC\n");
         disconnect(sock);
@@ -333,7 +359,7 @@ int raAskPC(const char *hash, const char *serial, const char *savepath,
             LOG("RA: PC is asking the server, waiting (%d)\n", w + 1);
 
             DelayThread(RA_WAIT_PAUSE_MS * 1000);
-            got = ask(sock, &to, req, g_rx, sizeof(g_rx));
+            got = ask(sock, to, &nto, req, g_rx, sizeof(g_rx));
             if (got <= 0) {
                 LOG("RA: PC went silent while identifying the image\n");
                 disconnect(sock);
@@ -425,7 +451,7 @@ int raAskPC(const char *hash, const char *serial, const char *savepath,
         /* A reply carrying another chunk's index is a leftover from an
            earlier request: ask again rather than fail. */
         for (attempt = 0; attempt < 3; attempt++) {
-            got = ask(sock, &to, req, g_rx, sizeof(g_rx));
+            got = ask(sock, to, &nto, req, g_rx, sizeof(g_rx));
             if (got <= 0) {
                 LOG("RA: chunk %d did not arrive\n", i);
                 disconnect(sock);
@@ -519,12 +545,12 @@ int raAskPC(const char *hash, const char *serial, const char *savepath,
     return 0;
 }
 
-/* Link test for the menu: broadcasts every 250 ms for up to three seconds.
+/* Link test for the menu: asks every 250 ms for up to three seconds.
    The reply's source address and the version in its text tell what
    answered; the round trip is measured with clock(). */
 int raNetTestLink(char *line1, int sz1, char *line2, int sz2)
 {
-    struct sockaddr_in to, from;
+    struct sockaddr_in to[2], from;
     socklen_t fromlen;
     char myaddr[32], req[64];
     /* Rules 1 and 3 from the file header apply here too: a 64-byte
@@ -533,7 +559,7 @@ int raNetTestLink(char *line1, int sz1, char *line2, int sz2)
        path (with its EE-side buffer limit) is never used. */
     static char rx[256] __attribute__((aligned(64)));
     u8 ip[4];
-    int sock, got = 0, found = 0;
+    int sock, got = 0, found = 0, nto, k;
     clock_t t0, deadline;
     unsigned int ms;
 
@@ -553,7 +579,7 @@ int raNetTestLink(char *line1, int sz1, char *line2, int sz2)
         return 0;
     }
 
-    broadcast_target(&to);
+    nto = pc_targets(to);
     snprintf(req, sizeof(req), "RAP1%s", myaddr);
 
     t0 = clock();
@@ -562,7 +588,8 @@ int raNetTestLink(char *line1, int sz1, char *line2, int sz2)
     while (!found && clock() < deadline) {
         int w;
 
-        sendto(sock, req, strlen(req), 0, (struct sockaddr *)&to, sizeof(to));
+        for (k = 0; k < nto; k++)
+            sendto(sock, req, strlen(req), 0, (struct sockaddr *)&to[k], sizeof(to[k]));
 
         for (w = 0; w < 10 && !found; w++) {
             memset(rx, 0, sizeof(rx));
@@ -582,7 +609,11 @@ int raNetTestLink(char *line1, int sz1, char *line2, int sz2)
 
     if (!found) {
         snprintf(line1, sz1, "No PC client answered within 3 seconds");
-        snprintf(line2, sz2, "Console%s. Check that xerabora runs and UDP 18194 is open", myaddr);
+        if (nto > 1)
+            snprintf(line2, sz2, "Console%s, RA client IP %d.%d.%d.%d. Is xerabora running, UDP 18194 open?",
+                     myaddr, ra_pc_ip[0], ra_pc_ip[1], ra_pc_ip[2], ra_pc_ip[3]);
+        else
+            snprintf(line2, sz2, "Console%s. Check that xerabora runs and UDP 18194 is open", myaddr);
         return 0;
     }
 

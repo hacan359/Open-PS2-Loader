@@ -102,6 +102,7 @@ extern int ps2_dns[4];
 extern int gETHOpMode; // See ETH_OP_MODES.
 extern int gPCShareAddressIsNetBIOS;
 extern int pc_ip[4];
+extern int ra_pc_ip[4]; // RA: the PC client's address; 0.0.0.0 finds it by broadcast
 extern int gPCPort;
 // Please keep these string lengths in-sync with the limits within CDVDMAN.
 extern char gPCShareNBAddress[17];

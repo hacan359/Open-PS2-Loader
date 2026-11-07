@@ -125,6 +125,17 @@ struct UIItem diaNetConfig[] = {
     {UI_PASSWORD, NETCFG_SHARE_PASSWORD, 1, 1, _STR_HINT_GUEST, 0, 0, {.stringvalue = {"", "", NULL}}},
     {UI_BREAK},
 
+    //  ---- RetroAchievements PC client ----
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_RA_PC_IP}}},
+    {UI_SPACER},
+    {UI_INT, NETCFG_RA_PC_IP_0, 1, 1, _STR_HINT_RA_PC_IP, 0, 0, {.intvalue = {0, 0, 0, 255}}},
+    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {".", -1}}},
+    {UI_INT, NETCFG_RA_PC_IP_1, 1, 1, _STR_HINT_RA_PC_IP, 0, 0, {.intvalue = {0, 0, 0, 255}}},
+    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {".", -1}}},
+    {UI_INT, NETCFG_RA_PC_IP_2, 1, 1, _STR_HINT_RA_PC_IP, 0, 0, {.intvalue = {0, 0, 0, 255}}},
+    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {".", -1}}},
+    {UI_INT, NETCFG_RA_PC_IP_3, 1, 1, _STR_HINT_RA_PC_IP, 0, 0, {.intvalue = {0, 0, 0, 255}}},
+
     // buttons
     {UI_BREAK},
     {UI_BUTTON, NETCFG_OK, 1, 1, -1, 0, 0, {.label = {NULL, -1}}},

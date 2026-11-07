@@ -716,3 +716,7 @@ gui_strings:
   string: Prefix
 - label: RA_BADGE_SUFFIX
   string: Suffix
+- label: RA_PC_IP
+  string: RA client IP
+- label: HINT_RA_PC_IP
+  string: Behind a router, the PC's address; 0.0.0.0 asks by broadcast
