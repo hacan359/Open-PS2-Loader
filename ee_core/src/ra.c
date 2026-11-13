@@ -55,7 +55,8 @@ static unsigned int ra_frames = 0;
    [0 .. count)                entries, one word each
    [count .. +2N)              nodes: packed word, then offset
    [count+2N .. +3N)           what each chain read this frame
-   [count+3N .. +4N)           where each chain reads its base, precomputed */
+   [count+3N .. +4N)           where each chain reads its base, precomputed
+   [count+4N .. +5N)           what each chain multiplies its base by */
 static u32 *ra_watch = NULL;
 static int ra_watch_count = 0;
 static int ra_watch_bytes = 0;
@@ -85,6 +86,7 @@ static inline u32 ra_ticks(void)
 #define RA_NODE_OFF(i)  ra_watch[ra_node_at + (i)*2 + 1]
 #define RA_NODE_VAL(i)  ra_watch[ra_node_at + ra_node_count * 2 + (i)]
 #define RA_NODE_BASE(i) ra_watch[ra_node_at + ra_node_count * 3 + (i)]
+#define RA_NODE_MUL(i)  ra_watch[ra_node_at + ra_node_count * 4 + (i)]
 
 /* Direct values plus eight bytes per chain: what a snapshot carries. */
 static int ra_snap_bytes = 0;
@@ -259,9 +261,10 @@ static void ra_snap_send(void)
     }
 
     /* Pointer chains. Each one takes its base from what was just staged
-       -- the same value the client will see -- adds the static offset
-       and reads there, byte at a time so an odd address cannot raise an
-       address error inside an interrupt handler.
+       -- the same value the client will see -- cuts out the bits the
+       set uses, scales them, adds the static offset and reads there,
+       byte at a time so an odd address cannot raise an address error
+       inside an interrupt handler.
 
        The pair carries the address as well as the value, so the client
        answers rcheevos by lookup instead of walking the chain a second
@@ -276,6 +279,7 @@ static void ra_snap_send(void)
         u32 w = RA_NODE_W(i);
         u32 parent = RA_NODE_PARENT(w);
         u32 size = RA_NODE_SIZE(w);
+        u32 width = RA_NODE_WIDTH(w);
         u32 base, addr, v = 0;
 
         if (size != 1 && size != 2 && size != 4) {
@@ -296,7 +300,11 @@ static void ra_snap_send(void)
                 base |= ((u32)at[2] << 16) | ((u32)at[3] << 24);
         }
 
-        addr = (base + RA_NODE_OFF(i)) & 0x1FFFFFFF;
+        base >>= RA_NODE_SHIFT(w);
+        if (width != 0 && width < 32)
+            base &= (1u << width) - 1;
+
+        addr = (base * RA_NODE_MUL(i) + RA_NODE_OFF(i)) & 0x1FFFFFFF;
 
         if (size == 0 || addr < RA_RAM_LOW || addr + size > RA_RAM_HIGH) {
             addr = 0;

@@ -156,10 +156,10 @@ static void TakeNodes(const struct ra_node *nodes, unsigned int count)
    bytes for most games, 17 KB at the ceilings.
 
    Layout, in words: entries[count], then nodes as (w, offset) pairs,
-   then two scratch words per node for ee_core, then the snapshot
-   buffer on a 64-byte boundary. */
+   then two scratch words per node for ee_core, then one scale per
+   node, then the snapshot buffer on a 64-byte boundary. */
 static u32 *gBlockList = NULL;
-static struct ra_node *gBlockNodes = NULL;
+static u32 *gBlockNodes = NULL;
 static void *gBlockSnap = NULL;
 
 static void *align64(const void *p)
@@ -171,7 +171,7 @@ void *PlaceWatchBlock(void *at)
 {
     u32 *words;
     u8 *snap;
-    int nwords;
+    int nwords, i;
 
     gBlockList = NULL;
     gBlockNodes = NULL;
@@ -181,13 +181,20 @@ void *PlaceWatchBlock(void *at)
         return at;
 
     words = (u32 *)align64(at);
-    nwords = gWatchCount + gNodeCount * 4;
+    nwords = gWatchCount + gNodeCount * 5;
 
     memcpy(words, gWatchList, gWatchCount * sizeof(u32));
     if (gNodeCount > 0) {
-        memcpy(&words[gWatchCount], gNodeList, gNodeCount * sizeof(struct ra_node));
+        u32 *pair = &words[gWatchCount];
+        u32 *scale = &words[gWatchCount + gNodeCount * 4];
+
+        for (i = 0; i < gNodeCount; i++) {
+            pair[i * 2] = gNodeList[i].w;
+            pair[i * 2 + 1] = gNodeList[i].offset;
+            scale[i] = gNodeList[i].scale;
+        }
         memset(&words[gWatchCount + gNodeCount * 2], 0, gNodeCount * 2 * sizeof(u32));
-        gBlockNodes = (struct ra_node *)&words[gWatchCount];
+        gBlockNodes = pair;
     }
     gBlockList = words;
 
@@ -206,7 +213,7 @@ u32 *GetWatchBlockList(void)
     return gBlockList;
 }
 
-struct ra_node *GetWatchBlockNodes(void)
+u32 *GetWatchBlockNodes(void)
 {
     return gBlockNodes;
 }

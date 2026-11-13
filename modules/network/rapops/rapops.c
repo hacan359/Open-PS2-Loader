@@ -61,14 +61,15 @@ static void start_rapull(void *snap)
     if (g_cfg.count == 0 || g_cfg.count > RA_WATCH_MAX || g_cfg.node_count > RA_NODE_MAX)
         return;
 
-    list = AllocSysMemory(ALLOC_FIRST, (g_cfg.count + g_cfg.node_count * 2) * sizeof(u32), NULL);
+    list = AllocSysMemory(ALLOC_FIRST, (g_cfg.count + g_cfg.node_count * 3) * sizeof(u32), NULL);
     if (list == NULL)
         return;
     for (i = 0; i < (int)g_cfg.count; i++)
         list[i] = g_cfg.list[i];
     for (i = 0; i < (int)g_cfg.node_count; i++) {
-        list[g_cfg.count + i * 2] = g_cfg.nodes[i].w;
-        list[g_cfg.count + i * 2 + 1] = g_cfg.nodes[i].offset;
+        list[g_cfg.count + i * 3] = g_cfg.nodes[i].w;
+        list[g_cfg.count + i * 3 + 1] = g_cfg.nodes[i].offset;
+        list[g_cfg.count + i * 3 + 2] = g_cfg.nodes[i].scale;
     }
 
     hex32(&args[0], (u32)snap);

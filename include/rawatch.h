@@ -31,7 +31,7 @@ void ClearWatchList(void);
 void *PlaceWatchBlock(void *at);
 /* Where the block put things, NULL without a list. */
 u32 *GetWatchBlockList(void);
-struct ra_node *GetWatchBlockNodes(void);
+u32 *GetWatchBlockNodes(void);
 void *GetWatchBlockSnap(void);
 
 #endif

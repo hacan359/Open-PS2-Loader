@@ -282,6 +282,7 @@ static void rp_frame_values(int read)
         u32 nw = rp_nodes[i].w;
         u32 parent = RA_NODE_PARENT(nw);
         u32 size = RA_NODE_SIZE(nw);
+        u32 width = RA_NODE_WIDTH(nw);
         u32 base = 0, addr, v = 0;
 
         if (RA_NODE_FROM_NODE(nw)) {
@@ -290,7 +291,11 @@ static void rp_frame_values(int read)
             base = rp_get(&rp_stage[rp_entry_off[parent]], RA_WATCH_SIZE(rp_list[parent]));
         }
 
-        addr = (base + rp_nodes[i].offset) & 0x1FFFFFFF;
+        base >>= RA_NODE_SHIFT(nw);
+        if (width != 0 && width < 32)
+            base &= (1u << width) - 1;
+
+        addr = (base * rp_nodes[i].scale + rp_nodes[i].offset) & 0x1FFFFFFF;
         if (!read) {
             addr = 0;
         } else if ((size == 1 || size == 2 || size == 4) && rp_valid(addr, size)) {
