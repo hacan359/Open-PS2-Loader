@@ -97,9 +97,23 @@ lbl_startlocate:
     }
 
     while (tocLength > 0) {
-        if (sceCdRead(tocLBA, 1, cdvdman_buf, NULL) == 0)
-            return NULL;
-        sceCdSync(0);
+        {
+            unsigned int retries = 0;
+            int result;
+
+            while ((result = cdvdman_SearchRead(tocLBA)) == 0) {
+                if (++retries >= 1000) {
+                    DPRINTF("directory read admission exhausted lsn=%u\n", tocLBA);
+                    return NULL;
+                }
+                // Release the shared scratch buffer lock so unaligned reads can finish.
+                SignalSema(cdvdman_searchfilesema);
+                DelayThread(1000);
+                WaitSema(cdvdman_searchfilesema);
+            }
+            if (result < 0)
+                return NULL;
+        }
         DPRINTF("cdvdman_locatefile tocLBA read done\n");
 
         tocLength -= 2048;
@@ -155,7 +169,7 @@ lbl_startlocate:
 //-------------------------------------------------------------------------
 static int cdvdman_findfile(sceCdlFILE *pcdfile, const char *name, int layer)
 {
-    static char cdvdman_filepath[256];
+    char cdvdman_filepath[256];
     u32 lsn;
     struct dirTocEntry *tocEntryPointer;
     layer_info_t *pLayerInfo;
