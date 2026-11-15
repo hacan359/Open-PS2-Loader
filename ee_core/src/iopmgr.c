@@ -232,6 +232,10 @@ static void ResetIopSpecial(const char *args, unsigned int arglen)
             args[RA_ARG_PC - 1] = ',';
             ra_hex32(config->raPcIp, &args[RA_ARG_PC]);
 
+            args[RA_ARG_HASH - 1] = ',';
+            for (n = 0; n < RA_HASH_LEN; n++)
+                args[RA_ARG_HASH + n] = config->raHash[0] != '\0' ? config->raHash[n] : '0';
+
             args[RA_ARG_ID - 1] = ',';
             for (n = 0; n < RA_ARG_ID_MAX && config->GameID[n] != '\0'; n++)
                 args[RA_ARG_ID + n] = config->GameID[n];

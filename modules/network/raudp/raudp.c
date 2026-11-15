@@ -118,6 +118,10 @@ static int ra_rx_in_game = 1;
    therefore no snapshot, and the PC would see a header of zeroes. */
 static char ra_game_id[16] = {0};
 
+/* The image hash of the game's watch list, from the same argument;
+   empty when the list carries none. */
+static char ra_game_hash[RA_HASH_LEN + 1] = {0};
+
 /* Counters reported in every packet. */
 static u32 ra_seq = 0;      /* packets sent or skipped */
 static u32 ra_fail = 0;     /* SMAPSendPacket() errors */
@@ -1036,6 +1040,29 @@ static void ra_heartbeat(void)
     ra_ctl_send(hb, n);
 }
 
+/* Every second: "RAI1 <serial> <hash>", so a PC client that has never
+   seen this game knows which image runs. Nothing without a hash. */
+static void ra_identify(void)
+{
+    char msg[RA_CTL_MAX];
+    int n = 0, i;
+
+    if (ra_game_hash[0] == '\0' || ra_game_id[0] == '\0')
+        return;
+
+    msg[n++] = 'R';
+    msg[n++] = 'A';
+    msg[n++] = 'I';
+    msg[n++] = '1';
+    msg[n++] = ' ';
+    for (i = 0; i < (int)sizeof(ra_game_id) - 1 && ra_game_id[i] != '\0'; i++)
+        msg[n++] = ra_game_id[i];
+    msg[n++] = ' ';
+    for (i = 0; i < RA_HASH_LEN; i++)
+        msg[n++] = ra_game_hash[i];
+    ra_ctl_send(msg, n);
+}
+
 static int ra_start_thread(void (*entry)(void *), int priority)
 {
     iop_thread_t thread;
@@ -1090,6 +1117,8 @@ static void ra_thread(void *arg)
             ra_drain_rx();
             ra_poll_pc();
         }
+        if (iter % RA_KEEPALIVE_TICKS == 0)
+            ra_identify();
         if (++iter % RA_HEARTBEAT_TICKS == 0)
             ra_heartbeat();
         DelayThread(RA_POLL_US);
@@ -1122,6 +1151,15 @@ int _start(int argc, char *argv[])
             ra_rx_in_game = argv[1][RA_ARG_RX] != '0';
         if (len >= RA_ARG_PC + 8 && argv[1][RA_ARG_PC - 1] == ',')
             ra_pc_ip = htonl(ra_hex_at(argv[1], RA_ARG_PC, 8));
+        if (len >= RA_ARG_HASH + RA_HASH_LEN && argv[1][RA_ARG_HASH - 1] == ',') {
+            int i, zeros = 0;
+
+            for (i = 0; i < RA_HASH_LEN; i++) {
+                ra_game_hash[i] = argv[1][RA_ARG_HASH + i];
+                zeros += ra_game_hash[i] == '0';
+            }
+            ra_game_hash[zeros == RA_HASH_LEN ? 0 : RA_HASH_LEN] = '\0';
+        }
         if (len >= RA_ARG_ID + 1 && argv[1][RA_ARG_ID - 1] == ',') {
             int i;
 

@@ -100,7 +100,7 @@
    not running" stays a fast failure. */
 #define RA_WAIT_ROUNDS   20
 #define RA_WAIT_PAUSE_MS 500
-#define RA_MAX_BYTES     (20 * 1024) /* 4096 entries, 128 chains and the headers */
+#define RA_MAX_BYTES     (20 * 1024) /* 4096 entries, 256 chains, the hash and the headers */
 
 /* Per-call non-blocking receive. The socket is also set non-blocking via
    fcntl (see open_pc_socket), but on the menu's netman lwIP stack that

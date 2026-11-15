@@ -38,6 +38,9 @@ static int gNodeCount = 0;
    to read the file, which on USB may not even have left the driver's
    cache yet. */
 static char gWatchStartup[16];
+/* The image hash the list in memory was built for; empty when the list
+   carries none. */
+static char gWatchHash[RA_HASH_LEN + 1];
 
 void raWatchListPath(char *out, int sz, const char *prefix, const char *serial)
 {
@@ -229,6 +232,28 @@ void ClearWatchList(void)
     gWatchBytes = 0;
     gNodeCount = 0;
     gWatchStartup[0] = '\0';
+    gWatchHash[0] = '\0';
+}
+
+/* Keeps the hash when all of it is hex digits. */
+static void TakeHash(const char *hash)
+{
+    int i;
+
+    gWatchHash[0] = '\0';
+    for (i = 0; i < RA_HASH_LEN; i++) {
+        char c = hash[i];
+
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+            return;
+    }
+    memcpy(gWatchHash, hash, RA_HASH_LEN);
+    gWatchHash[RA_HASH_LEN] = '\0';
+}
+
+const char *GetWatchHash(void)
+{
+    return gWatchHash;
 }
 
 /* Debug build only: appends one line per event while a game launches.
@@ -308,9 +333,23 @@ int SetWatchList(const void *data, int len, const char *startup)
         if (left >= (int)sizeof(struct ra_node_file)) {
             const struct ra_node_file *nf = (const struct ra_node_file *)tail;
 
-            if (nf->magic == RA_NODE_MAGIC &&
-                left >= (int)(sizeof(*nf) + nf->count * sizeof(struct ra_node)))
+            if (nf->magic == RA_NODE_MAGIC && nf->count <= RA_NODE_MAX &&
+                left >= (int)(sizeof(*nf) + nf->count * sizeof(struct ra_node))) {
+                int used = (int)(sizeof(*nf) + nf->count * sizeof(struct ra_node));
+
                 TakeNodes((const struct ra_node *)(nf + 1), nf->count);
+                tail += used;
+                left -= used;
+            }
+        }
+
+        /* The image hash closes the list. */
+        if (left >= (int)sizeof(struct ra_hash_file)) {
+            struct ra_hash_file hf;
+
+            memcpy(&hf, tail, sizeof(hf));
+            if (hf.magic == RA_HASH_MAGIC)
+                TakeHash(hf.hash);
         }
     }
 
@@ -404,13 +443,24 @@ int LoadWatchList(const char *path, const char *startup)
        if anything is wrong. */
     {
         struct ra_node_file nf;
+        struct ra_hash_file hf;
+        int have = read(fd, &nf, sizeof(nf));
 
-        if (read(fd, &nf, sizeof(nf)) == (int)sizeof(nf) && nf.magic == RA_NODE_MAGIC &&
+        if (have == (int)sizeof(nf) && nf.magic == RA_NODE_MAGIC &&
             nf.count > 0 && nf.count <= RA_NODE_MAX) {
             int want = (int)(nf.count * sizeof(struct ra_node));
 
             if (read(fd, gNodeList, want) == want)
                 TakeNodes(gNodeList, nf.count);
+            have = read(fd, &nf, sizeof(nf));
+        }
+
+        /* The image hash closes the file; its first eight bytes are
+           already in nf. */
+        if (have == (int)sizeof(nf) && nf.magic == RA_HASH_MAGIC) {
+            memcpy(&hf, &nf, sizeof(nf));
+            if (read(fd, (char *)&hf + sizeof(nf), sizeof(hf) - sizeof(nf)) == (int)(sizeof(hf) - sizeof(nf)))
+                TakeHash(hf.hash);
         }
     }
 

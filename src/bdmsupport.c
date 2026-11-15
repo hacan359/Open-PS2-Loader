@@ -382,6 +382,7 @@ static void bdmWriteRaPopsModule(const char *root, const char *serial)
         cfg->ipcfg_len = n;
         snprintf(cfg->game_id, sizeof(cfg->game_id), "%s", serial);
         cfg->pc_ip = raNetPCAddr();
+        snprintf(cfg->hash, sizeof(cfg->hash), "%s", GetWatchHash());
         if (GetWatchCount() > 0 && GetWatchCount() <= RA_WATCH_MAX && GetNodeCount() <= RA_NODE_MAX) {
             cfg->count = GetWatchCount();
             cfg->bytes = GetWatchBytes();

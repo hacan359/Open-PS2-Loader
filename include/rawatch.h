@@ -21,6 +21,8 @@ int GetWatchBytes(void);
    parent points backwards, so ee_core can resolve them in one pass. */
 struct ra_node *GetNodeList(void);
 int GetNodeCount(void);
+/* The image hash of the list in memory, "" when it carries none. */
+const char *GetWatchHash(void);
 void ClearWatchList(void);
 
 /* Copies the list, its chains and room for the snapshot into a block

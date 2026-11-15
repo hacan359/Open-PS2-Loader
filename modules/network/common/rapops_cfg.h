@@ -19,6 +19,7 @@ struct rapops_cfg
     char ipcfg[RAPOPS_IPCFG_MAX];             /* "ip\0mask\0gateway\0", as SMAP takes it */
     char game_id[16];                         /* the serial, e.g. "SLUS_012.15" */
     unsigned int pc_ip;                       /* the PC client's IP, first octet on top; 0: broadcast only */
+    char hash[RA_HASH_LEN + 4];               /* the image hash of the list, "" when it carries none */
     /* the watch list for rapull, the reader on the IOP; count 0: no list */
     unsigned int count;
     unsigned int bytes;

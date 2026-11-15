@@ -102,6 +102,12 @@ static int ra_snap_bytes = 0;
 #define RA_RAM_LOW  0x00080000
 #define RA_RAM_HIGH 0x02000000
 
+/* The 16 KB scratchpad: RetroAchievements numbers it right above the
+   RAM, the console has it at RA_SPR_BASE. */
+#define RA_SPR_LOW  0x02000000
+#define RA_SPR_HIGH 0x02004000
+#define RA_SPR_BASE 0x70000000
+
 /* Chains: the loader laid them out behind the entries as (w, offset)
    pairs, with the two scratch words per node zeroed after them. The
    node list pointer must therefore be exactly that spot. A list that
@@ -235,7 +241,12 @@ static void ra_snap_send(void)
         if (off + size > (u32)ra_watch_bytes)
             break;
 
-        if (addr < RA_RAM_LOW || addr + size > RA_RAM_HIGH) {
+        if (addr >= RA_SPR_LOW && addr + size <= RA_SPR_HIGH) {
+            const volatile u8 *spr = (const volatile u8 *)(RA_SPR_BASE + (addr - RA_SPR_LOW));
+
+            for (j = 0; j < size; j++)
+                vals[off++] = spr[j];
+        } else if (addr < RA_RAM_LOW || addr + size > RA_RAM_HIGH) {
             for (j = 0; j < size; j++)
                 vals[off++] = 0;
         } else if (size == 4 && (addr & 3) == 0) {

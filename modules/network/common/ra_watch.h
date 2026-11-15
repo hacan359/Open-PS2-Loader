@@ -121,10 +121,8 @@ struct ra_watch_file
 #define RA_NODE_MAGIC 0x324E4152 /* "RAN2" in little-endian */
 
 /* Node ceiling. Nodes travel with the list into module storage, 20
-   bytes each there (the node, then two scratch words per frame). A set
-   with subsets can carry several dozen. The snapshot ceiling binds
-   next, at 8 bytes per node. */
-#define RA_NODE_MAX 128
+   bytes each there, and add 8 bytes each to a snapshot. */
+#define RA_NODE_MAX 256
 
 /* Bytes one node adds to a snapshot: the resolved address and the value. */
 #define RA_NODE_PAIR_BYTES 8
@@ -133,6 +131,17 @@ struct ra_node_file
 {
     unsigned int magic; /* RA_NODE_MAGIC */
     unsigned int count; /* nodes that follow */
+};
+
+/* The image hash the list was built for, 32 hex digits without a
+   terminator. It closes the file, after the nodes when there are any. */
+#define RA_HASH_MAGIC 0x31484152 /* "RAH1" in little-endian */
+#define RA_HASH_LEN   32
+
+struct ra_hash_file
+{
+    unsigned int magic; /* RA_HASH_MAGIC */
+    char hash[RA_HASH_LEN];
 };
 
 /* One node: some bits of the parent, scaled, plus offset -> read size

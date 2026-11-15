@@ -988,6 +988,7 @@ void sysLaunchLoaderElf(const char *filename, const char *mode_str, int size_cdv
     config->raNodeList = GetWatchBlockNodes();
     config->raNodeCount = GetNodeCount();
     config->raSnapBuf = GetWatchBlockSnap();
+    snprintf(config->raHash, sizeof(config->raHash), "%s", GetWatchHash());
     config->raPcIp = raNetPCAddr();
 
     /* The last point where the list is still ours: from here it goes

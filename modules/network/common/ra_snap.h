@@ -92,6 +92,8 @@ struct ra_event
                    while the game runs
      RA_ARG_PC     eight hex digits, the PC client's IP with the first
                    octet on top; zero: find the PC by broadcast only
+     RA_ARG_HASH   RA_HASH_LEN characters, the image hash of the list;
+                   all '0' when the list carries none
      RA_ARG_ID     the game's serial, up to RA_ARG_ID_MAX characters
    argv[2] to argv[4] are SMAP's ipconfig strings: own IP, netmask,
    gateway. Both sides build and parse the argument by these offsets. */
@@ -99,7 +101,8 @@ struct ra_event
 #define RA_ARG_EVENT  9
 #define RA_ARG_RX     18
 #define RA_ARG_PC     20
-#define RA_ARG_ID     29
+#define RA_ARG_HASH   29
+#define RA_ARG_ID     62
 #define RA_ARG_ID_MAX 15
 #define RA_ARG_MAX    (RA_ARG_ID + RA_ARG_ID_MAX) /* characters before the terminator */
 
