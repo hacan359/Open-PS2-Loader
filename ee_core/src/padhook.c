@@ -32,9 +32,9 @@
 #ifdef IGS
 #include "igs_api.h"
 #endif
-#include "cheat_api.h"
 #include "cd_igr_rpc.h"
 #include "coreconfig.h"
+#include "ra.h"
 
 /* scePadPortOpen & scePad2CreateSocket prototypes */
 static int (*scePadPortOpen)(int port, int slot, void *addr);
@@ -49,6 +49,7 @@ static powerbuttondata_t Power_Button;
 /* IGR Thread ID and interrupt handler */
 static int IGR_Thread_ID = -1;
 static int IGR_Intc_ID = -1;
+static int RA_Intc_ID = -1;
 
 /* IGR thread stack & stack size */
 #define IGR_STACK_SIZE (4 * 1024)
@@ -133,6 +134,17 @@ static void t_loadElf(void)
     Exit(0);
 }
 
+void IGR_RequestReset(void)
+{
+    /* The VBLANK handler below reads combo_type on its next tick and
+       runs the reset from there; this only leaves the request. A reset
+       already under way is not replaced. */
+    if (IGR_Thread_ID < 0)
+        return; /* Mode 6: no IGR, so no reset over the network either */
+    if (Pad_Data.combo_type == 0x00)
+        Pad_Data.combo_type = IGR_COMBO_START_SELECT;
+}
+
 // In Game Reset Thread
 static void IGR_Thread(void *arg)
 {
@@ -161,7 +173,12 @@ static void IGR_Thread(void *arg)
         if (EnableDebug)
             DBGCOL(0xFF8000, IGR, "oplIGRShutdown()");
 
-        oplIGRShutdown(0);
+        /* RA disc mode: the shutdown RPC server lives inside OPL's
+           cdvdman, which is not loaded; oplIGRShutdown would spin
+           forever waiting for it to bind. The ROM's cdvdman needs no
+           such notice. */
+        if (config->GameMode != DISC_MODE)
+            oplIGRShutdown(0);
 
         if (EnableDebug)
             DBGCOL(0x0000FF, IGR, "Reset IOP");
@@ -202,13 +219,6 @@ static void IGR_Thread(void *arg)
             DisableGSM();
         }
 
-        if (config->gCheatList) {
-            if (EnableDebug)
-                DBGCOL(0xFF0000, IGR, "Stopping CheatEngine");
-            DPRINTF("Stopping PS2RD Cheat Engine...\n");
-            DisableCheats();
-        }
-
         if (EnableDebug)
             DBGCOL(0x00FFFF, IGR, "Waiting for IOP Reboot");
 
@@ -231,6 +241,18 @@ static void IGR_Thread(void *arg)
         // Reset SPU - do it after the IOP reboot, so nothing will compete with the EE for it.
         LoadOPLModule(OPL_MODULE_ID_RESETSPU, 0, 0, NULL);
 
+        if (config->MMCEIGRSettings != 0) {
+            // Trigger switch to bootcard on MMCE's
+            char slots[3] = "00";
+            if ((config->MMCEIGRSettings & 1))
+                slots[0] = '1';
+
+            if ((config->MMCEIGRSettings & 2))
+                slots[1] = '1';
+
+            LoadOPLModule(OPL_MODULE_ID_MMCEIGR, 0, sizeof(slots), slots);
+        }
+
 #ifdef IGS
         if ((Pad_Data.combo_type == IGR_COMBO_UP) && (config->EnableGSMOp))
             InGameScreenshot();
@@ -250,7 +272,10 @@ static void IGR_Thread(void *arg)
             DBGCOL(0x0000FF, IGR, "oplIGRShutdown(1)");
 
         // If combo is R3 + L3, Poweroff PS2
-        oplIGRShutdown(1);
+        // RA disc mode: same RPC, same missing server. The power-off
+        // combo does nothing there; the front button still works.
+        if (config->GameMode != DISC_MODE)
+            oplIGRShutdown(1);
     }
 }
 
@@ -271,6 +296,8 @@ static int IGR_Intc_Handler(int cause)
     USE_LOCAL_EECORE_CONFIG;
     int i;
     u8 pad_pos_state, pad_pos_frame, pad_pos_combo1, pad_pos_combo2;
+
+    RA_OnVblank(); /* RetroAchievements: per-frame memory snapshot */
 
     if (Pad_Data.pad_buf != NULL) {
         // Copy values via the uncached segment, to bypass the cache.
@@ -460,6 +487,26 @@ void Reset_Padhook(void)
 {
     IGR_Intc_ID = -1;
     IGR_Thread_ID = -1;
+}
+
+/* Mode 6 asks for no IGR, and the game gets none: no thread, no padOpen
+   patch, no CreateThread/ExecPS2 hooks. The per-frame RA snapshot still
+   needs a tick, so this handler carries RA_OnVblank alone. */
+static int RA_Intc_Handler(int cause)
+{
+    RA_OnVblank();
+
+    ExitHandler();
+
+    return 0;
+}
+
+void Install_RA_Vblank(void)
+{
+    if (RA_Intc_ID < 0) {
+        RA_Intc_ID = AddIntcHandler(kINTC_VBLANK_END, RA_Intc_Handler, 0);
+        EnableIntc(kINTC_VBLANK_END);
+    }
 }
 
 // Hook function for libpad scePadPortOpen

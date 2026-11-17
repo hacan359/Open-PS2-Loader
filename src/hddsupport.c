@@ -10,7 +10,6 @@
 #include "include/ioman.h"
 #include "include/system.h"
 #include "include/extern_irx.h"
-#include "include/cheatman.h"
 #include "modules/iopcore/common/cdvd_config.h"
 
 #define NEWLIB_PORT_AWARE
@@ -432,7 +431,6 @@ void hddLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)
 {
     int i, size_irx = 0;
     int EnablePS2Logo = 0;
-    int result;
     void *irx = NULL;
     char filename[32];
     hdl_game_info_t *game;
@@ -557,18 +555,10 @@ void hddLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)
 
     sbPrepare(NULL, configSet, size_irx, irx, &i);
 
-    if ((result = sbLoadCheats(gHDDPrefix, game->startup)) < 0) {
-        if (gAutoLaunchGame == NULL) {
-            switch (result) {
-                case -ENOENT:
-                    guiWarning(_l(_STR_NO_CHEATS_FOUND), 10);
-                    break;
-                default:
-                    guiWarning(_l(_STR_ERR_CHEATS_LOAD_FAILED), 10);
-            }
-        } else
-            LOG("Cheats error\n");
-    }
+    sbLoadWatchList(gHDDPrefix, game->startup); /* RA: watch list */
+    /* Games on HDD are stored in HDLoader format, not as image files:
+       hdl_game_info_t has neither a file name nor an extension, so
+       there is nothing to hash. Watch lists still load from RA/. */
 
     settings = (struct cdvdman_settings_hdd *)((u8 *)irx + i);
 

@@ -110,4 +110,11 @@ SECTIONS {
 
 	_end = _stack + _stack_size ;
 	PROVIDE(end = _end);
+
+	/* The stack is only what ram84 leaves above .bss, so every byte added to
+	   .bss comes off it. The first IOP reset alone needs about 1.4 KB and runs
+	   before anything can report a fault: a build with 1920 bytes of stack
+	   hangs there, one with 2304 does not. Refuse to link below 3 KB rather
+	   than find out on a console. */
+	ASSERT(_stack_size >= 0xC00, "ee_core: under 3 KB left for the stack above .bss -- move data out of ee_core")
 }

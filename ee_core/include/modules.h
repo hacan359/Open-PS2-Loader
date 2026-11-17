@@ -14,12 +14,23 @@ enum OPL_MODULE_ID {
     OPL_MODULE_ID_ILINKBD,
 
     // mx4sio mode modules
+    OPL_MODULE_ID_SIO2MAN,
     OPL_MODULE_ID_MX4SIOBD,
 
     // SMB mode modules
     OPL_MODULE_ID_SMSTCPIP,
     OPL_MODULE_ID_SMAP,
     OPL_MODULE_ID_SMBINIT,
+
+    // RetroAchievements: telemetry sender (UDP from inside the game)
+    OPL_MODULE_ID_RAUDP,
+
+    // RA disc mode: a standalone DEV9 driver. In every other mode DEV9
+    // is built into OPL's own cdvdman, which the disc mode does not
+    // load, and the in-game SMAP imports it from there.
+    OPL_MODULE_ID_DEV9,
+    // RA disc mode: same story for smsutils, which SMSTCPIP imports.
+    OPL_MODULE_ID_SMSUTILS,
 
     // VMC module
     OPL_MODULE_ID_MCEMU,
@@ -35,6 +46,10 @@ enum OPL_MODULE_ID {
 
     // Special patches
     OPL_MODULE_ID_IOP_PATCH,
+
+    // MMCEDRV module
+    OPL_MODULE_ID_MMCEDRV,
+    OPL_MODULE_ID_MMCEIGR,
 
     OPL_MODULE_ID_COUNT
 };

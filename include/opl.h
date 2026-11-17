@@ -102,6 +102,7 @@ extern int ps2_dns[4];
 extern int gETHOpMode; // See ETH_OP_MODES.
 extern int gPCShareAddressIsNetBIOS;
 extern int pc_ip[4];
+extern int ra_pc_ip[4]; // RA: the PC client's address; 0.0.0.0 finds it by broadcast
 extern int gPCPort;
 // Please keep these string lengths in-sync with the limits within CDVDMAN.
 extern char gPCShareNBAddress[17];
@@ -119,15 +120,24 @@ extern int gBDMStartMode;
 extern int gHDDStartMode;
 extern int gETHStartMode;
 extern int gAPPStartMode;
+extern int gMMCEStartMode;
 extern int bdmCacheSize;
 extern int hddCacheSize;
 extern int smbCacheSize;
 
+extern int gMMCESlot;
+extern int gMMCEIGRSlot;
+extern int gMMCEEnableGameID; //Send GameID on game launch
+/* POPStarter reads an exFAT USB device only with the BDMAssault usbexfat pair */
+extern int gPs1UsbExfat;
 extern int gEnableILK;
 extern int gEnableMX4SIO;
 extern int gEnableBdmHDD;
 
 extern int gAutosort;
+/* RA: 0 = "RA " before the game name, 1 = " [RA]" after it, so the
+   list stays alphabetical */
+extern int gRABadgeSuffix;
 extern int gAutoRefresh;
 extern int gEnableNotifications;
 extern int gEnableArt;
@@ -150,7 +160,6 @@ extern char gDefaultBGMPath[128];
 extern int gXSensitivity;
 extern int gYSensitivity;
 
-extern int gCheatSource;
 extern int gGSMSource;
 extern int gPadEmuSource;
 
@@ -194,6 +203,7 @@ extern int gEnableWrite;
 // These prefixes are relative to the device's name (meaning that they do not include the device name).
 extern char gBDMPrefix[32];
 extern char gETHPrefix[32];
+extern char gMMCEPrefix[32];
 
 extern int gRememberLastPlayed;
 

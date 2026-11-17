@@ -179,6 +179,30 @@ int HandleRxIntr(struct SmapDriverData *SmapDrivPrivData)
     return NumPacketsReceived;
 }
 
+/* RA: two IOP threads now call SMAPSendPacket: the stack thread for
+   game traffic and the raudp thread for RetroAchievements telemetry.
+   Without mutual exclusion one call could land in the middle of the
+   other's FIFO write. SMAPTxInit() creates the mutex when the driver
+   initializes. */
+static int smap_tx_sema = -1;
+
+int SMAPTxInit(void)
+{
+    iop_sema_t sema;
+
+    if (smap_tx_sema >= 0)
+        return 0;
+
+    sema.attr = 0;
+    sema.option = 0;
+    sema.initial = 1;
+    sema.max = 1;
+
+    smap_tx_sema = CreateSema(&sema);
+
+    return smap_tx_sema < 0 ? -1 : 0;
+}
+
 int SMAPSendPacket(const void *data, unsigned int length)
 {
     int result;
@@ -190,6 +214,9 @@ int SMAPSendPacket(const void *data, unsigned int length)
     unsigned int SizeRounded;
 
     if (SmapDriverData.SmapIsInitialized) {
+        if (smap_tx_sema >= 0)
+            WaitSema(smap_tx_sema);
+
         SizeRounded = (length + 3) & ~3;
         smap_regbase = SmapDriverData.smap_regbase;
         emac3_regbase = SmapDriverData.emac3_regbase;
@@ -242,7 +269,8 @@ int SMAPSendPacket(const void *data, unsigned int length)
             : "at", "v0", "v1", "t0", "t1", "t2", "t3");
 
         BD_ptr->length = length;
-        BD_ptr->pointer = BD_data_ptr;
+        /* Descriptors use the TX buffer address, not the FIFO write offset. */
+        BD_ptr->pointer = BD_data_ptr + 0x1000;
         SMAP_REG8(SMAP_R_TXFIFO_FRAME_INC) = 0;
         BD_ptr->ctrl_stat = SMAP_BD_TX_READY | SMAP_BD_TX_GENFCS | SMAP_BD_TX_GENPAD;
         SmapDriverData.TxBDIndex++;
@@ -250,6 +278,9 @@ int SMAPSendPacket(const void *data, unsigned int length)
         SMAP_EMAC3_SET(SMAP_R_EMAC3_TxMODE0, SMAP_E3_TX_GNP_0);
 
         result = 1;
+
+        if (smap_tx_sema >= 0)
+            SignalSema(smap_tx_sema);
     } else
         result = -1;
 

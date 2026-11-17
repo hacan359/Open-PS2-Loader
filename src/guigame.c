@@ -11,7 +11,6 @@
 #include "include/config.h"
 #include "include/ethsupport.h"
 #include "include/compatupd.h"
-#include "include/cheatman.h"
 #include "include/system.h"
 #include "include/guigame.h"
 #include "include/ds34common.h"
@@ -34,9 +33,6 @@ static int GSMVMode;
 static int GSMXOffset;
 static int GSMYOffset;
 static int GSMFIELDFix;
-
-static int EnableCheat;
-static int CheatMode;
 
 static int forceGlobalOSDLanguage;
 
@@ -72,7 +68,6 @@ static char configSource[128];
 
 // forward declarations.
 static void guiGameLoadGSMConfig(config_set_t *configSet, config_set_t *configGame);
-static void guiGameLoadCheatsConfig(config_set_t *configSet, config_set_t *configGame);
 #ifdef PADEMU
 static void guiGameLoadPadEmuConfig(config_set_t *configSet, config_set_t *configGame);
 static void guiGameLoadPadMacroConfig(config_set_t *configSet, config_set_t *configGame);
@@ -414,51 +409,6 @@ void guiGameShowGSConfig(void)
     diaSetEnabled(diaGSConfig, GSMCFG_GSMFIELDFIX, EnableGSM);
 
     diaExecuteDialog(diaGSConfig, -1, 1, &guiGameGSMUpdater);
-}
-
-// CHEATS
-static void guiGameSetCheatSettingsState(void)
-{
-    int previousSource = gCheatSource;
-
-    diaGetInt(diaCheatConfig, CHTCFG_CHEATSOURCE, &gCheatSource);
-
-    // update GUI to display per-game or global settings if changed
-    if (previousSource != gCheatSource && gCheatSource == SETTINGS_GLOBAL) {
-        config_set_t *configSet = gameMenuLoadConfig(diaCheatConfig);
-        configRemoveKey(configSet, CONFIG_ITEM_CHEATSSOURCE);
-        guiGameLoadCheatsConfig(configSet, configGetByType(CONFIG_GAME));
-    } else if (previousSource != gCheatSource && gCheatSource == SETTINGS_PERGAME) {
-        config_set_t *configSet = gameMenuLoadConfig(diaCheatConfig);
-        configSetInt(configSet, CONFIG_ITEM_CHEATSSOURCE, gCheatSource);
-        guiGameLoadCheatsConfig(configSet, configGetByType(CONFIG_GAME));
-    }
-
-    diaGetInt(diaCheatConfig, CHTCFG_ENABLECHEAT, &EnableCheat);
-    diaGetInt(diaCheatConfig, CHTCFG_CHEATMODE, &CheatMode);
-    diaSetEnabled(diaCheatConfig, CHTCFG_CHEATMODE, EnableCheat);
-}
-
-static int guiGameCheatUpdater(int modified)
-{
-    if (modified) {
-        guiGameSetCheatSettingsState();
-    }
-
-    return 0;
-}
-
-void guiGameShowCheatConfig(void)
-{
-    // configure the enumerations
-    const char *settingsSource[] = {_l(_STR_GLOBAL_SETTINGS), _l(_STR_PERGAME_SETTINGS), NULL};
-    const char *cheatmodeNames[] = {_l(_STR_CHEATMODEAUTO), _l(_STR_CHEATMODESELECT), NULL};
-
-    diaSetEnum(diaCheatConfig, CHTCFG_CHEATSOURCE, settingsSource);
-    diaSetEnum(diaCheatConfig, CHTCFG_CHEATMODE, cheatmodeNames);
-    diaSetEnabled(diaCheatConfig, CHTCFG_CHEATMODE, EnableCheat);
-
-    diaExecuteDialog(diaCheatConfig, -1, 1, &guiGameCheatUpdater);
 }
 
 // PADEMU
@@ -1047,27 +997,6 @@ int guiGameSaveConfig(config_set_t *configSet, item_list_t *support)
         configSetInt(configGame, CONFIG_ITEM_GSMFIELDFIX, GSMFIELDFix);
     }
 
-    /// Cheats ///
-    diaGetInt(diaCheatConfig, CHTCFG_CHEATSOURCE, &gCheatSource);
-    diaGetInt(diaCheatConfig, CHTCFG_ENABLECHEAT, &EnableCheat);
-    diaGetInt(diaCheatConfig, CHTCFG_CHEATMODE, &CheatMode);
-
-    if (gCheatSource == SETTINGS_PERGAME) {
-        result = configSetInt(configSet, CONFIG_ITEM_CHEATSSOURCE, gCheatSource);
-        if (EnableCheat != 0)
-            result = configSetInt(configSet, CONFIG_ITEM_ENABLECHEAT, EnableCheat);
-        else
-            configRemoveKey(configSet, CONFIG_ITEM_ENABLECHEAT);
-
-        if (CheatMode != 0)
-            result = configSetInt(configSet, CONFIG_ITEM_CHEATMODE, CheatMode);
-        else
-            configRemoveKey(configSet, CONFIG_ITEM_CHEATMODE);
-    } else if (gCheatSource == SETTINGS_GLOBAL) {
-        configSetInt(configGame, CONFIG_ITEM_ENABLECHEAT, EnableCheat);
-        configSetInt(configGame, CONFIG_ITEM_CHEATMODE, CheatMode);
-    }
-
 #ifdef PADEMU
     /// PADEMU ///
     result = guiGameSavePadEmuGameConfig(configSet, result);
@@ -1099,10 +1028,6 @@ int guiGameSaveConfig(config_set_t *configSet, item_list_t *support)
 void guiGameRemoveGlobalSettings(config_set_t *configGame)
 {
     if (menuCheckParentalLock() == 0) {
-        // Cheats
-        configRemoveKey(configGame, CONFIG_ITEM_ENABLECHEAT);
-        configRemoveKey(configGame, CONFIG_ITEM_CHEATMODE);
-
         // GSM
         configRemoveKey(configGame, CONFIG_ITEM_ENABLEGSM);
         configRemoveKey(configGame, CONFIG_ITEM_GSMVMODE);
@@ -1141,11 +1066,6 @@ void guiGameRemoveSettings(config_set_t *configSet)
         configRemoveKey(configSet, CONFIG_ITEM_GSMXOFFSET);
         configRemoveKey(configSet, CONFIG_ITEM_GSMYOFFSET);
         configRemoveKey(configSet, CONFIG_ITEM_GSMFIELDFIX);
-
-        // Cheats
-        configRemoveKey(configSet, CONFIG_ITEM_CHEATSSOURCE);
-        configRemoveKey(configSet, CONFIG_ITEM_ENABLECHEAT);
-        configRemoveKey(configSet, CONFIG_ITEM_CHEATMODE);
 
         // OSD Language
         configRemoveKey(configSet, CONFIG_ITEM_OSD_SETTINGS_LANGID);
@@ -1214,31 +1134,6 @@ static void guiGameLoadGSMConfig(config_set_t *configSet, config_set_t *configGa
     diaSetInt(diaGSConfig, GSMCFG_GSMXOFFSET, GSMXOffset);
     diaSetInt(diaGSConfig, GSMCFG_GSMYOFFSET, GSMYOffset);
     diaSetInt(diaGSConfig, GSMCFG_GSMFIELDFIX, GSMFIELDFix);
-}
-
-static void guiGameLoadCheatsConfig(config_set_t *configSet, config_set_t *configGame)
-{
-    EnableCheat = 0;
-    CheatMode = 0;
-
-    // set global settings.
-    gCheatSource = 0;
-    configGetInt(configGame, CONFIG_ITEM_ENABLECHEAT, &EnableCheat);
-    configGetInt(configGame, CONFIG_ITEM_CHEATMODE, &CheatMode);
-
-    // override global with per-game settings if available and selected.
-    configGetInt(configSet, CONFIG_ITEM_CHEATSSOURCE, &gCheatSource);
-    if (gCheatSource == SETTINGS_PERGAME) {
-        if (!configGetInt(configSet, CONFIG_ITEM_ENABLECHEAT, &EnableCheat))
-            EnableCheat = 0;
-        if (!configGetInt(configSet, CONFIG_ITEM_CHEATMODE, &CheatMode))
-            CheatMode = 0;
-    }
-
-    // set gui settings.
-    diaSetInt(diaCheatConfig, CHTCFG_CHEATSOURCE, gCheatSource);
-    diaSetInt(diaCheatConfig, CHTCFG_ENABLECHEAT, EnableCheat);
-    diaSetInt(diaCheatConfig, CHTCFG_CHEATMODE, CheatMode);
 }
 
 #ifdef PADEMU
@@ -1463,7 +1358,6 @@ void guiGameLoadConfig(item_list_t *support, config_set_t *configSet)
 
     guiGameLoadGSMConfig(configSet, configGame);
 
-    guiGameLoadCheatsConfig(configSet, configGame);
 #ifdef PADEMU
     guiGameLoadPadEmuConfig(configSet, configGame);
     guiGameLoadPadMacroConfig(configSet, configGame);

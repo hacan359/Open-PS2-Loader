@@ -125,6 +125,17 @@ struct UIItem diaNetConfig[] = {
     {UI_PASSWORD, NETCFG_SHARE_PASSWORD, 1, 1, _STR_HINT_GUEST, 0, 0, {.stringvalue = {"", "", NULL}}},
     {UI_BREAK},
 
+    //  ---- RetroAchievements PC client ----
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_RA_PC_IP}}},
+    {UI_SPACER},
+    {UI_INT, NETCFG_RA_PC_IP_0, 1, 1, _STR_HINT_RA_PC_IP, 0, 0, {.intvalue = {0, 0, 0, 255}}},
+    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {".", -1}}},
+    {UI_INT, NETCFG_RA_PC_IP_1, 1, 1, _STR_HINT_RA_PC_IP, 0, 0, {.intvalue = {0, 0, 0, 255}}},
+    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {".", -1}}},
+    {UI_INT, NETCFG_RA_PC_IP_2, 1, 1, _STR_HINT_RA_PC_IP, 0, 0, {.intvalue = {0, 0, 0, 255}}},
+    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {".", -1}}},
+    {UI_INT, NETCFG_RA_PC_IP_3, 1, 1, _STR_HINT_RA_PC_IP, 0, 0, {.intvalue = {0, 0, 0, 255}}},
+
     // buttons
     {UI_BREAK},
     {UI_BUTTON, NETCFG_OK, 1, 1, -1, 0, 0, {.label = {NULL, -1}}},
@@ -228,6 +239,11 @@ struct UIItem diaConfig[] = {
     {UI_BUTTON, BLOCKDEVICE_BUTTON, 1, 1, _STR_HINT_BLOCK_DEVICES, 0, 0, {.label = {NULL, _STR_BLOCKDEVICE_SETTINGS}}},
     {UI_BREAK},
 
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {"PS1 USB drive is exFAT", -1}}},
+    {UI_SPACER},
+    {UI_BOOL, CFG_PS1USBEXFAT, 1, 1, -1, 0, 0, {.intvalue = {0, 0}}},
+    {UI_BREAK},
+
     {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_HDDMODE}}},
     {UI_SPACER},
     {UI_ENUM, CFG_HDDMODE, 1, 1, _STR_HDD_HINT, 0, 0, {.intvalue = {0, 0}}},
@@ -286,6 +302,11 @@ struct UIItem diaUIConfig[] = {
     {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_AUTOSORT}}},
     {UI_SPACER},
     {UI_BOOL, UICFG_AUTOSORT, 1, 1, -1, 0, 0, {.intvalue = {0, 0}}},
+    {UI_BREAK},
+
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_RA_BADGE_POS}}},
+    {UI_SPACER},
+    {UI_ENUM, UICFG_RABADGE, 1, 1, -1, 0, 0, {.intvalue = {0, 0}}},
     {UI_BREAK},
 
     {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_AUTOREFRESH}}},
@@ -511,34 +532,6 @@ struct UIItem diaGSConfig[] = {
     {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_GSM_FIELD_FIX}}},
     {UI_SPACER},
     {UI_BOOL, GSMCFG_GSMFIELDFIX, 1, 1, _STR_HINT_GSM_FIELD_FIX, 0, 0, {.intvalue = {0, 0}}},
-    {UI_BREAK},
-
-    // buttons
-    {UI_OK, 0, 1, 1, -1, 0, 0, {.label = {NULL, _STR_OK}}},
-    {UI_BREAK},
-
-    // end of dialog
-    {UI_TERMINATOR}};
-
-// Per Game Settings > Cheat Menu --Bat--
-struct UIItem diaCheatConfig[] = {
-    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {NULL, _STR_CHEAT_SETTINGS}}},
-    {UI_SPLITTER},
-
-    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_SETTINGS_SOURCE}}},
-    {UI_SPACER},
-    {UI_ENUM, CHTCFG_CHEATSOURCE, 1, 1, -1, 0, 0, {.intvalue = {0, 0}}},
-    {UI_BREAK},
-    {UI_BREAK},
-
-    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_ENABLECHEAT}}},
-    {UI_SPACER},
-    {UI_BOOL, CHTCFG_ENABLECHEAT, 1, 1, _STR_HINT_ENABLECHEAT, 0, 0, {.intvalue = {1, 1}}},
-    {UI_BREAK},
-
-    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_CHEATMODE}}},
-    {UI_SPACER},
-    {UI_ENUM, CHTCFG_CHEATMODE, 1, 1, _STR_HINT_CHEATMODE, 0, 0, {.intvalue = {0, 0}}},
     {UI_BREAK},
 
     // buttons
@@ -856,6 +849,14 @@ struct UIItem diaAbout[] = {
     {UI_LABEL, ABOUT_TITLE, 1, 1, -1, 0, 0, {.label = {NULL, -1}}},
     {UI_SPLITTER},
 
+    // RetroAchievements integration
+    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {"RetroAchievements integration", -1}}},
+    {UI_BREAK},
+    {UI_SPACER},
+    {UI_LABEL, 0, 1, 1, -1, 0, 15, {.label = {"hacan359", -1}}},
+    {UI_BREAK},
+    {UI_BREAK},
+
     // Coders
     {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {NULL, _STR_DEVS}}},
     {UI_BREAK},
@@ -1080,5 +1081,45 @@ struct UIItem diaOSDConfig[] = {
     // buttons
     {UI_OK, 0, 1, 1, -1, 0, 0, {.label = {NULL, _STR_OK}}},
     {UI_BREAK},
+    // end of dialog
+    {UI_TERMINATOR}};
+
+
+// MMCE Settings Menu
+struct UIItem diaMMCEConfig[] = {
+    {UI_LABEL, 0, 1, 1, -1, 0, 0, {.label = {NULL, _STR_MMCE_SETTINGS}}},
+    {UI_SPLITTER},
+
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_MMCEMODE}}},
+    {UI_SPACER},
+    {UI_ENUM, CFG_MMCEMODE, 1, 1, -1, 0, 0, {.intvalue = {0, 0}}},
+    {UI_BREAK},
+
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_MMCE_SLOT}}},
+    {UI_SPACER},
+    {UI_ENUM, CFG_MMCESLOT, 1, 1, -1, 0, 0, {.intvalue = {0, 0, 0, 1}}},
+    {UI_BREAK},
+
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_MMCEIGR_SLOT}}},
+    {UI_SPACER},
+    {UI_ENUM, CFG_MMCEIGRSLOT, 1, 1, _STR_HINT_MMCEIGR_SLOT, 0, 0, {.intvalue = {0, 0, 0, 1}}},
+    {UI_BREAK},
+
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {NULL, _STR_MMCE_PREFIX}}},
+    {UI_SPACER},
+    {UI_STRING, CFG_MMCEPREFIX, 1, 1, -1, 0, 0, {.stringvalue = {"", "", NULL}}},
+    {UI_BREAK},
+
+#ifdef __DEBUG
+    {UI_LABEL, 0, 1, 1, -1, -40, 0, {.label = {"Send GameID on Launch", -1}}},
+    {UI_SPACER},
+    {UI_BOOL, CFG_MMCEGAMEID, 1, 1, -1, 0, 0, {.intvalue = {0, 0}}},
+    {UI_BREAK},
+#endif
+
+    // buttons
+    {UI_OK, 0, 1, 1, -1, 0, 0, {.label = {NULL, _STR_OK}}},
+    {UI_BREAK},
+
     // end of dialog
     {UI_TERMINATOR}};
